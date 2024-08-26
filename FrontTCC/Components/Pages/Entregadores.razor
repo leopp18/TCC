@@ -1,0 +1,171 @@
+﻿@page "/entregadores"
+@rendermode InteractiveServer
+
+@using Blazorise
+@inject HttpClient Http
+
+<PageTitle>Entregadores</PageTitle>
+
+<h1>Entregadores</h1>
+
+<div class="d-flex justify-content-end mb-3">
+    <button class="btn btn-success" @onclick="ShowNewDeliveryPersonModal"><i class="bi bi-person-plus"></i></button>
+</div>
+
+<Table Striped Bordered>
+    <TableHeader ThemeContrast="ThemeContrast.Dark">
+        <TableRow>
+            <TableHeaderCell>#</TableHeaderCell>
+            <TableHeaderCell>Nome</TableHeaderCell>
+            <TableHeaderCell>Sobrenome</TableHeaderCell>
+            <TableHeaderCell>Pix</TableHeaderCell>
+            <TableHeaderCell>Status</TableHeaderCell>
+            <TableHeaderCell>Operações</TableHeaderCell> <!-- Nova coluna de operações -->
+        </TableRow>
+    </TableHeader>
+    <TableBody>
+        @if (entregadores != null)
+        {
+            @foreach (var entregador in entregadores)
+            {
+                <TableRow>
+                    <TableRowHeader>@entregador.Id</TableRowHeader>
+                    <TableRowCell>@entregador.Nome</TableRowCell>
+                    <TableRowCell>@entregador.Sobrenome</TableRowCell>
+                    <TableRowCell>@entregador.Pix</TableRowCell>
+                    <TableRowCell>@(entregador.Situacao ? "Ativo" : "Inativo")</TableRowCell>
+                    <TableRowCell>
+                        <button class="btn btn-primary btn-sm" @onclick="() => ShowEditDeliveryPersonModal(entregador)"><i class="bi bi-pencil"></i></button>
+                        <button class="btn btn-danger btn-sm" @onclick="() => OnDeleteClicked(entregador.Id)"><i class="bi bi-trash"></i></button>
+                    </TableRowCell>
+                </TableRow>
+            }
+        }
+    </TableBody>
+</Table>
+
+<Modal @bind-Visible="showNewDeliveryPersonModal">
+    <ModalBackdrop />
+    <ModalContent>
+        <ModalHeader>
+            <ModalTitle>@(isEditMode ? "Editar Entregador" : "Novo Entregador")</ModalTitle>
+            <Button CloseButton @onclick="HideNewDeliveryPersonModal" />
+        </ModalHeader>
+        <ModalBody>
+            <div class="form-group">
+                <label for="nome">Nome</label>
+                <input type="text" class="form-control" id="nome" @bind="newEntregador.Nome" />
+            </div>
+            <div class="form-group">
+                <label for="sobrenome">Sobrenome</label>
+                <input type="text" class="form-control" id="sobrenome" @bind="newEntregador.Sobrenome" />
+            </div>
+            <div class="form-group">
+                <label for="pix">Pix</label>
+                <input type="text" class="form-control" id="pix" @bind="newEntregador.Pix" />
+            </div>
+            <div class="form-group">
+                <label for="status">Status</label>
+                <select class="form-control" id="status" @bind="newEntregador.Situacao">
+                    <option value="true">Ativo</option>
+                    <option value="false">Inativo</option>
+                </select>
+            </div>
+        </ModalBody>
+        <ModalFooter>
+            <Button Color="Color.Primary" @onclick="SaveNewDeliveryPerson">Salvar</Button>
+            <Button Color="Color.Secondary" @onclick="HideNewDeliveryPersonModal">Cancelar</Button>
+        </ModalFooter>
+    </ModalContent>
+</Modal>
+
+@code {
+    private bool showNewDeliveryPersonModal = false;
+    private bool isEditMode = false;
+    private List<Entregador> entregadores = new List<Entregador>();
+    private Entregador newEntregador = new Entregador();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEntregadores();
+    }
+
+    private async Task LoadEntregadores()
+    {
+        try
+        {
+            entregadores = await Http.GetFromJsonAsync<List<Entregador>>("https://localhost:7083/api/Entregador/entregadores") ?? new List<Entregador>();
+        }
+        catch (Exception ex)
+        {
+            // Adicionar um tratamento de erro adequado aqui
+            Console.WriteLine($"Erro ao carregar entregadores: {ex.Message}");
+        }
+    }
+
+    private Task ShowNewDeliveryPersonModal()
+    {
+        newEntregador = new Entregador();
+        isEditMode = false;
+        showNewDeliveryPersonModal = true;
+        return Task.CompletedTask;
+    }
+
+    private Task ShowEditDeliveryPersonModal(Entregador entregador)
+    {
+        newEntregador = new Entregador
+        {
+            Id = entregador.Id,
+            Nome = entregador.Nome,
+            Sobrenome = entregador.Sobrenome,
+            Pix = entregador.Pix,
+            Situacao = entregador.Situacao
+        };
+        isEditMode = true;
+        showNewDeliveryPersonModal = true;
+        return Task.CompletedTask;
+    }
+
+    private Task HideNewDeliveryPersonModal()
+    {
+        showNewDeliveryPersonModal = false;
+        return Task.CompletedTask;
+    }
+
+    private async Task SaveNewDeliveryPerson()
+    {
+        try
+        {
+            if (isEditMode)
+            {
+                await Http.PutAsJsonAsync($"https://localhost:7083/api/Entregador/{newEntregador.Id}", newEntregador);
+            }
+            else
+            {
+                await Http.PostAsJsonAsync("https://localhost:7083/api/Entregador", newEntregador);
+            }
+            await LoadEntregadores();
+            showNewDeliveryPersonModal = false;
+        }
+        catch (Exception ex)
+        {
+            // Adicionar um tratamento de erro adequado aqui
+            Console.WriteLine($"Erro ao salvar entregador: {ex.Message}");
+        }
+    }
+
+    private void OnDeleteClicked(int id)
+    {
+        // Lógica para deletar
+        Console.WriteLine($"Deletar entregador com ID: {id}");
+    }
+
+    public class Entregador
+    {
+        public int Id { get; set; }
+        public string? Nome { get; set; }
+        public string? Sobrenome { get; set; }
+        public string? Pix { get; set; }
+        public bool Situacao { get; set; } // Mapeado para bit no banco de dados
+    }
+}
