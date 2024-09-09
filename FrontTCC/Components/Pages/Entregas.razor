@@ -1,0 +1,163 @@
+﻿@page "/tipos-de-entrega"
+@rendermode InteractiveServer
+
+@using Blazorise
+@inject HttpClient Http
+
+<PageTitle>Tipos de Entrega</PageTitle>
+
+<h1>Tipos de Entrega</h1>
+
+<div class="d-flex justify-content-end mb-3">
+    <button class="btn btn-success" @onclick="ShowNewEntregaModal"><i class="bi bi-plus-circle"></i></button>
+</div>
+
+<Table Striped Bordered>
+    <TableHeader ThemeContrast="ThemeContrast.Dark">
+        <TableRow>
+            <TableHeaderCell>#</TableHeaderCell>
+            <TableHeaderCell>Nome</TableHeaderCell>
+            <TableHeaderCell>Valor</TableHeaderCell>
+            <TableHeaderCell>Status</TableHeaderCell>
+            <TableHeaderCell>Operações</TableHeaderCell>
+        </TableRow>
+    </TableHeader>
+    <TableBody>
+        @if (entregas != null)
+        {
+            @foreach (var entrega in entregas)
+            {
+                <TableRow>
+                    <TableRowHeader>@entrega.Id</TableRowHeader>
+                    <TableRowCell>@entrega.Nome</TableRowCell>
+                    <TableRowCell>@entrega.Valor.ToString("C")</TableRowCell>
+                    <TableRowCell>@(entrega.Situacao ? "Ativo" : "Inativo")</TableRowCell>
+                    <TableRowCell>
+                        <button class="btn btn-primary btn-sm" @onclick="() => ShowEditEntregaModal(entrega)"><i class="bi bi-pencil"></i></button>
+                        <button class="btn btn-danger btn-sm" @onclick="() => OnDeleteClicked(entrega.Id)"><i class="bi bi-trash"></i></button>
+                    </TableRowCell>
+                </TableRow>
+            }
+        }
+    </TableBody>
+</Table>
+
+<Modal @bind-Visible="showNewEntregaModal">
+    <ModalBackdrop />
+    <ModalContent>
+        <ModalHeader>
+            <ModalTitle>@(isEditMode ? "Editar Entrega" : "Nova Entrega")</ModalTitle>
+            <Button CloseButton @onclick="HideNewEntregaModal" />
+        </ModalHeader>
+        <ModalBody>
+            <div class="form-group">
+                <label for="nome">Nome</label>
+                <input type="text" class="form-control" id="nome" @bind="newEntrega.Nome" />
+            </div>
+            <div class="form-group">
+                <label for="valor">Valor</label>
+                <input type="number" class="form-control" id="valor" @bind="newEntrega.Valor" />
+            </div>
+            <div class="form-group">
+                <br/>
+                <label for="status">Status</label>
+                <Select @bind-SelectedValue="@newEntrega.Situacao">
+                    <SelectItem Value="true">Ativo</SelectItem>
+                    <SelectItem Value="false">Inativo</SelectItem>
+                </Select>
+            </div>
+        </ModalBody>
+        <ModalFooter>
+            <Button Color="Color.Primary" @onclick="SaveNewEntrega">Salvar</Button>
+            <Button Color="Color.Secondary" @onclick="HideNewEntregaModal">Cancelar</Button>
+        </ModalFooter>
+    </ModalContent>
+</Modal>
+
+@code {
+    private bool showNewEntregaModal = false;
+    private bool isEditMode = false;
+    private List<Entrega> entregas = new List<Entrega>();
+    private Entrega newEntrega = new Entrega();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEntregas();
+    }
+
+    private async Task LoadEntregas()
+    {
+        try
+        {
+            entregas = await Http.GetFromJsonAsync<List<Entrega>>("https://localhost:7083/api/Entrega/entregas") ?? new List<Entrega>();
+        }
+        catch (Exception ex)
+        {
+            // Adicionar um tratamento de erro adequado aqui
+            Console.WriteLine($"Erro ao carregar entregas: {ex.Message}");
+        }
+    }
+
+    private void ShowNewEntregaModal()
+    {
+        newEntrega = new Entrega();
+        isEditMode = false;
+        showNewEntregaModal = true;
+    }
+
+    private void ShowEditEntregaModal(Entrega entrega)
+    {
+        newEntrega = new Entrega
+        {
+            Id = entrega.Id,
+            Nome = entrega.Nome,
+            Valor = entrega.Valor,
+            Situacao = entrega.Situacao
+        };
+        isEditMode = true;
+        showNewEntregaModal = true;
+    }
+
+    private void HideNewEntregaModal()
+    {
+        showNewEntregaModal = false;
+    }
+
+    private async Task SaveNewEntrega()
+    {
+        try
+        {
+            if (isEditMode)
+            {
+                Console.WriteLine("Id de edição: " + newEntrega.Id);
+                Console.WriteLine("JSON de edição: " + newEntrega.Nome + newEntrega.Situacao);
+                await Http.PutAsJsonAsync($"https://localhost:7083/api/Entrega/entregas/{newEntrega.Id}", newEntrega);
+            }
+            else
+            {
+                await Http.PostAsJsonAsync("https://localhost:7083/api/Entrega/entregas", newEntrega);
+            }
+            await LoadEntregas();
+            showNewEntregaModal = false;
+        }
+        catch (Exception ex)
+        {
+            // Adicionar um tratamento de erro adequado aqui
+            Console.WriteLine($"Erro ao salvar entrega: {ex.Message}");
+        }
+    }
+
+    private void OnDeleteClicked(int id)
+    {
+        // Lógica para deletar
+        Console.WriteLine($"Deletar entrega com ID: {id}");
+    }
+
+    public class Entrega
+    {
+        public int Id { get; set; }
+        public string? Nome { get; set; }
+        public decimal Valor { get; set; }
+        public bool Situacao { get; set; } // Mapeado para bit no banco de dados
+    }
+}

@@ -1,0 +1,217 @@
+﻿@page "/cidades"
+@rendermode InteractiveServer
+
+@using Blazorise
+@inject HttpClient Http
+
+<PageTitle>Cidades</PageTitle>
+
+<h1>Cidades</h1>
+
+<div class="d-flex justify-content-end mb-3">
+    <button class="btn btn-success" @onclick="ShowNewCityModal"><i class="bi bi-plus-circle"></i></button>
+</div>
+
+<Table Striped Bordered>
+    <TableHeader ThemeContrast="ThemeContrast.Dark">
+        <TableRow>
+            <TableHeaderCell>#</TableHeaderCell>
+            <TableHeaderCell>Nome</TableHeaderCell>
+            <TableHeaderCell>Estado</TableHeaderCell>
+            <TableHeaderCell>Status</TableHeaderCell>
+            <TableHeaderCell>Operações</TableHeaderCell>
+        </TableRow>
+    </TableHeader>
+    <TableBody>
+        @if (cidades != null)
+        {
+            @foreach (var cidade in cidades)
+            {
+                <TableRow>
+                    <TableRowHeader>@cidade.Id</TableRowHeader>
+                    <TableRowCell>@cidade.Nome</TableRowCell>
+                    <TableRowCell>@cidade.Estado?.Sigla</TableRowCell>
+                    <TableRowCell>@(cidade.Situacao ? "Ativo" : "Inativo")</TableRowCell>
+                    <TableRowCell>
+                        <button class="btn btn-primary btn-sm" @onclick="() => ShowEditCityModal(cidade)"><i class="bi bi-pencil"></i></button>
+                        <button class="btn btn-danger btn-sm" @onclick="() => OnDeleteClicked(cidade.Id)"><i class="bi bi-trash"></i></button>
+                    </TableRowCell>
+                </TableRow>
+            }
+        }
+    </TableBody>
+</Table>
+
+<Modal @bind-Visible="showNewCityModal">
+    <ModalBackdrop />
+    <ModalContent>
+        <ModalHeader>
+            <ModalTitle>@(isEditMode ? "Editar Cidade" : "Nova Cidade")</ModalTitle>
+            <Button CloseButton @onclick="HideNewCityModal" />
+        </ModalHeader>
+        <ModalBody>
+            <div class="form-group">
+                <label for="nome">Nome</label>
+                <input type="text" class="form-control" id="nome" @bind="newCity.Nome" />
+            </div>
+            <div class="form-group">
+                <label for="estado">Estado</label>
+                <select class="form-control" id="estado" @bind="newCity.FkEstado">
+                    <option value="">Selecione um estado</option>
+                    @foreach (var estado in estados)
+                    {
+                        <option value="@estado.Id">@estado.Nome</option>
+                    }
+                </select>
+            </div>
+            <div class="form-group">
+                <br/>
+                <label for="status">Status</label>
+                <Select @bind-SelectedValue="@newCity.Situacao">
+                    <SelectItem Value="true">Ativo</SelectItem>
+                    <SelectItem Value="false">Inativo</SelectItem>
+                </Select>
+            </div>
+        </ModalBody>
+        <ModalFooter>
+            <Button Color="Color.Primary" @onclick="SaveNewCity">Salvar</Button>
+            <Button Color="Color.Secondary" @onclick="HideNewCityModal">Cancelar</Button>
+        </ModalFooter>
+    </ModalContent>
+</Modal>
+
+@code {
+    private bool showNewCityModal = false;
+    private bool isEditMode = false;
+    private List<Cidade> cidades = new List<Cidade>();
+    private List<Estado> estados = new List<Estado>();
+    private Cidade newCity = new Cidade();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await LoadEstados();
+            await LoadCidades();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Erro na inicialização: {ex.Message}");
+        }
+    }
+
+    private async Task LoadCidades()
+    {
+        try
+        {
+            Console.WriteLine("Iniciando o carregamento das cidades...");
+            var cidadesResponse = await Http.GetFromJsonAsync<List<Cidade>>("https://localhost:7083/api/Cidade/cidades") ?? new List<Cidade>();
+            var estadosResponse = await Http.GetFromJsonAsync<List<Estado>>("https://localhost:7083/api/Estado/estados") ?? new List<Estado>();
+
+
+            // Associar estados às cidades
+            foreach (var cidade in cidadesResponse)
+            {
+                cidade.Estado = estadosResponse.FirstOrDefault(e => e.Id == cidade.FkEstado);
+                if (cidade.Estado == null)
+                {
+                    Console.WriteLine($"Estado não encontrado para a cidade: {cidade.Nome} (EstadoId: {cidade.FkEstado})");
+                }
+                else
+                {
+                    Console.WriteLine($"Cidade: {cidade.Nome}, Estado: {cidade.Estado.Nome}");
+                }
+            }
+
+            cidades = cidadesResponse;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Erro ao carregar cidades: {ex.Message}");
+        }
+    }
+
+    private async Task LoadEstados()
+    {
+        try
+        {
+            Console.WriteLine("Iniciando o carregamento dos estados...");
+            estados = await Http.GetFromJsonAsync<List<Estado>>("https://localhost:7083/api/Estado/estados") ?? new List<Estado>();
+            Console.WriteLine($"Estados carregados: {estados.Count}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Erro ao carregar estados: {ex.Message}");
+        }
+    }
+
+    private void ShowNewCityModal()
+    {
+        newCity = new Cidade();
+        isEditMode = false;
+        showNewCityModal = true;
+    }
+
+    private void ShowEditCityModal(Cidade cidade)
+    {
+        newCity = new Cidade
+        {
+            Id = cidade.Id,
+            Nome = cidade.Nome,
+                FkEstado = cidade.FkEstado,
+            Situacao = cidade.Situacao
+        };
+        isEditMode = true;
+        showNewCityModal = true;
+    }
+
+    private void HideNewCityModal()
+    {
+        showNewCityModal = false;
+    }
+
+    private async Task SaveNewCity()
+    {
+        try
+        {
+            if (isEditMode)
+            {
+                Console.WriteLine("Id de edição: " + newCity.Id);
+                Console.WriteLine("JSON de edição: " + newCity.Nome + newCity.Situacao);
+                await Http.PutAsJsonAsync($"https://localhost:7083/api/Cidade/cidades/{newCity.Id}", newCity);
+            }
+            else
+            {
+                await Http.PostAsJsonAsync("https://localhost:7083/api/Cidade/cidades", newCity);
+            }
+            await LoadCidades();
+            showNewCityModal = false;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Erro ao salvar cidade: {ex.Message}");
+        }
+    }
+
+    private void OnDeleteClicked(int id)
+    {
+        // Lógica para deletar
+        Console.WriteLine($"Deletar cidade com ID: {id}");
+    }
+
+    public class Cidade
+    {
+        public int Id { get; set; }
+        public string? Nome { get; set; }
+        public int FkEstado { get; set; }
+        public Estado? Estado { get; set; }
+        public bool Situacao { get; set; } // Mapeado para bit no banco de dados
+    }
+
+    public class Estado
+    {
+        public int Id { get; set; }
+        public string? Nome { get; set; }
+        public string? Sigla { get; set; }
+    }
+}

@@ -1,0 +1,149 @@
+﻿@page "/quantidades-sede"
+@using System.Net.Http.Json
+@inject HttpClient Http
+
+<Table Striped Bordered Editable>
+    <TableHeader ThemeContrast="ThemeContrast.Dark">
+        <TableRow>
+            <TableHeaderCell class="id-coluna">#</TableHeaderCell>
+            <TableHeaderCell class="nome-coluna">Nome</TableHeaderCell>
+            @foreach (var entrega in entregas)
+            {
+                <TableHeaderCell class="quantidades-coluna">@entrega.Nome</TableHeaderCell>
+            }
+        </TableRow>
+    </TableHeader>
+    <TableBody>
+        @if (items != null && entregadores != null)
+        {
+            int rowIndex = 1;
+            foreach (var item in items)
+            {
+                var entregador = entregadores.FirstOrDefault(e => e.Id == item.EntregadorId);
+                if (entregador != null)
+                {
+                    <tr>
+                        <td>@rowIndex</td>
+                        <td>@entregador.Nome @entregador.Sobrenome</td>
+                        @for (int i = 0; i < entregas.Count; i++)
+                        {
+                            <td>
+                                <TextEdit Plaintext @bind-Value="item.Quantidades[i]" />
+                            </td>
+                        }
+                    </tr>
+                }
+                rowIndex++;
+            }
+        }
+    </TableBody>
+</Table>
+
+<button class="btn btn-primary" @onclick="SaveQuantidades">Salvar</button>
+
+@code {
+    private List<Item> items = new List<Item>();
+    private List<Entregador> entregadores = new List<Entregador>();
+    private List<Entrega> entregas = new List<Entrega>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEntregadores();
+        await LoadEntregas();
+        InitializeItems();
+    }
+
+    private async Task LoadEntregadores()
+    {
+        try
+        {
+            entregadores = await Http.GetFromJsonAsync<List<Entregador>>("https://localhost:7083/api/Entregador/entregadores") ?? new List<Entregador>();
+            entregadores = entregadores.Where(e => e.Situacao).ToList(); // Filtrar apenas entregadores ativos
+            Console.WriteLine($"Entregadores carregados: {entregadores.Count}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Erro ao carregar entregadores: {ex.Message}");
+        }
+    }
+
+    private async Task LoadEntregas()
+    {
+        try
+        {
+            entregas = await Http.GetFromJsonAsync<List<Entrega>>("https://localhost:7083/api/Entrega/entregas") ?? new List<Entrega>();
+            entregas = entregas.Where(e => e.Situacao).ToList(); // Filtrar apenas entregas ativas
+            Console.WriteLine($"Entregas carregadas: {entregas.Count}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Erro ao carregar entregas: {ex.Message}");
+        }
+    }
+
+    private void InitializeItems()
+    {
+        foreach (var entregador in entregadores)
+        {
+            var item = new Item { EntregadorId = entregador.Id, Quantidades = new List<string>(new string[entregas.Count]) };
+            items.Add(item);
+        }
+        Console.WriteLine($"Itens inicializados: {items.Count}");
+    }
+
+    private async Task SaveQuantidades()
+    {
+        try
+        {
+            var quantidadesToSave = new List<QuantidadeDto>();
+            foreach (var item in items)
+            {
+                for (int i = 0; i < entregas.Count; i++)
+                {
+                    quantidadesToSave.Add(new QuantidadeDto
+                    {
+                        PagamentoId = item.EntregadorId, // Supondo que o ID do pagamento seja o mesmo do entregador por enquanto
+                        EntregaId = entregas[i].Id,
+                        Quantidade = int.TryParse(item.Quantidades[i], out var q) ? q : 0
+                    });
+                }
+            }
+
+            await Http.PostAsJsonAsync("https://localhost:7083/api/Quantidade", quantidadesToSave);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Erro ao salvar quantidades: {ex.Message}");
+        }
+    }
+
+    public class Item
+    {
+        public int EntregadorId { get; set; }
+        public List<string> Quantidades { get; set; } = new List<string>();
+    }
+
+    public class Entregador
+    {
+        public int Id { get; set; }
+        public string? Nome { get; set; }
+        public string? Sobrenome { get; set; }
+        public string? Pix { get; set; }
+        public bool Situacao { get; set; }
+    }
+
+    public class Entrega
+    {
+        public int Id { get; set; }
+        public string? Nome { get; set; }
+        public decimal Valor { get; set; }
+        public bool Situacao { get; set; }
+    }
+
+    public class QuantidadeDto
+    {
+        public int PagamentoId { get; set; }
+        public int EntregaId { get; set; }
+        public int Quantidade { get; set; }
+    }
+}

@@ -1,0 +1,149 @@
+﻿@page "/estados"
+@rendermode InteractiveServer
+
+@using Blazorise
+@inject HttpClient Http
+
+<PageTitle>Estados</PageTitle>
+
+<h1>Estados</h1>
+
+<div class="d-flex justify-content-end mb-3">
+    <button class="btn btn-success" @onclick="ShowNewStateModal"><i class="bi bi-plus-circle"></i></button>
+</div>
+
+<Table Striped Bordered>
+    <TableHeader ThemeContrast="ThemeContrast.Dark">
+        <TableRow>
+            <TableHeaderCell>#</TableHeaderCell>
+            <TableHeaderCell>Nome</TableHeaderCell>
+            <TableHeaderCell>Sigla</TableHeaderCell>
+            <TableHeaderCell>Operações</TableHeaderCell>
+        </TableRow>
+    </TableHeader>
+    <TableBody>
+        @if (estados != null)
+        {
+            @foreach (var estado in estados)
+            {
+                <TableRow>
+                    <TableRowHeader>@estado.Id</TableRowHeader>
+                    <TableRowCell>@estado.Nome</TableRowCell>
+                    <TableRowCell>@estado.Sigla</TableRowCell>
+                    <TableRowCell>
+                        <button class="btn btn-primary btn-sm" @onclick="() => ShowEditStateModal(estado)"><i class="bi bi-pencil"></i></button>
+                        <button class="btn btn-danger btn-sm" @onclick="() => OnDeleteClicked(estado.Id)"><i class="bi bi-trash"></i></button>
+                    </TableRowCell>
+                </TableRow>
+            }
+        }
+    </TableBody>
+</Table>
+
+<Modal @bind-Visible="showNewStateModal">
+    <ModalBackdrop />
+    <ModalContent>
+        <ModalHeader>
+            <ModalTitle>@(isEditMode ? "Editar Estado" : "Novo Estado")</ModalTitle>
+            <Button CloseButton @onclick="HideNewStateModal" />
+        </ModalHeader>
+        <ModalBody>
+            <div class="form-group">
+                <label for="nome">Nome</label>
+                <input type="text" class="form-control" id="nome" @bind="newState.Nome" />
+            </div>
+            <div class="form-group">
+                <label for="sigla">Sigla</label>
+                <input type="text" class="form-control" id="sigla" @bind="newState.Sigla" />
+            </div>
+        </ModalBody>
+        <ModalFooter>
+            <Button Color="Color.Primary" @onclick="SaveNewState">Salvar</Button>
+            <Button Color="Color.Secondary" @onclick="HideNewStateModal">Cancelar</Button>
+        </ModalFooter>
+    </ModalContent>
+</Modal>
+
+@code {
+    private bool showNewStateModal = false;
+    private bool isEditMode = false;
+    private List<Estado> estados = new List<Estado>();
+    private Estado newState = new Estado();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEstados();
+    }
+
+    private async Task LoadEstados()
+    {
+        try
+        {
+            estados = await Http.GetFromJsonAsync<List<Estado>>("https://localhost:7083/api/Estado/estados") ?? new List<Estado>();
+        }
+        catch (Exception ex)
+        {
+            // Adicionar um tratamento de erro adequado aqui
+            Console.WriteLine($"Erro ao carregar estados: {ex.Message}");
+        }
+    }
+
+    private void ShowNewStateModal()
+    {
+        newState = new Estado();
+        isEditMode = false;
+        showNewStateModal = true;
+    }
+
+    private void ShowEditStateModal(Estado estado)
+    {
+        newState = new Estado
+        {
+            Id = estado.Id,
+            Nome = estado.Nome,
+            Sigla = estado.Sigla
+        };
+        isEditMode = true;
+        showNewStateModal = true;
+    }
+
+    private void HideNewStateModal()
+    {
+        showNewStateModal = false;
+    }
+
+    private async Task SaveNewState()
+    {
+        try
+        {
+            if (isEditMode)
+            {
+                await Http.PutAsJsonAsync($"https://localhost:7083/api/Estado/estados/{newState.Id}", newState);
+            }
+            else
+            {
+                await Http.PostAsJsonAsync("https://localhost:7083/api/Estado/estados", newState);
+            }
+            await LoadEstados();
+            showNewStateModal = false;
+        }
+        catch (Exception ex)
+        {
+            // Adicionar um tratamento de erro adequado aqui
+            Console.WriteLine($"Erro ao salvar estado: {ex.Message}");
+        }
+    }
+
+    private void OnDeleteClicked(int id)
+    {
+        // Lógica para deletar
+        Console.WriteLine($"Deletar estado com ID: {id}");
+    }
+
+    public class Estado
+    {
+        public int Id { get; set; }
+        public string? Nome { get; set; }
+        public string? Sigla { get; set; }
+    }
+}
