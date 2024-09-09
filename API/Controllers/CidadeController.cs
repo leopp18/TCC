@@ -88,6 +88,7 @@ namespace API_TCC.Controllers
             try
             {
                 e.Nome = cidade.Nome;
+                e.Situacao = cidade.Situacao;
 
                 contexto.Cidades.Update(e);
                 await contexto.SaveChangesAsync();

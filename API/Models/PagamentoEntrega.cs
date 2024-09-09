@@ -13,7 +13,7 @@ public partial class PagamentoEntrega
 
     public int FkPagamento { get; set; }
 
-    public virtual Entrega FkEntregaNavigation { get; set; } = null!;
+    public virtual Entrega? FkEntregaNavigation { get; set; }
 
-    public virtual Pagamento FkPagamentoNavigation { get; set; } = null!;
+    public virtual Pagamento? FkPagamentoNavigation { get; set; }
 }

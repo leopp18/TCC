@@ -88,6 +88,7 @@ namespace API_TCC.Controllers
             {
                 e.Nome = entrega.Nome;
                 e.Valor = entrega.Valor;
+                e.Situacao = entrega.Situacao;
 
                 contexto.Entregas.Update(e);
                 await contexto.SaveChangesAsync();

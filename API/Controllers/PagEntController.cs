@@ -10,7 +10,6 @@ namespace API_TCC.Controllers
     [ApiController]
     public class PagEntController : ControllerBase
     {
-
         private readonly IJWTAuthenticationManager jwtAuthenticationManager;
 
         public PagEntController(IJWTAuthenticationManager jwtAuthenticationManager)
@@ -18,112 +17,108 @@ namespace API_TCC.Controllers
             this.jwtAuthenticationManager = jwtAuthenticationManager;
         }
 
-        //[HttpGet]
-        //[Route("entregadores")]
-        //public async Task<IActionResult> getAllAsync(//consulta geral
-        //    [FromServices] Contexto contexto)
-        //{
-        //    var e = await contexto
-        //        .Entregadores
-        //        .AsNoTracking()
-        //        .ToListAsync();
-        //    return e == null ? NotFound() : Ok(e);
-        //}
+        [HttpGet]
+        [Route("pagamentoentrega")]
+        public async Task<IActionResult> getAllAsync(//consulta geral
+            [FromServices] Contexto contexto)
+        {
+            var e = await contexto
+                .PagamentoEntregas
+                .AsNoTracking()
+                .ToListAsync();
+            return e == null ? NotFound() : Ok(e);
+        }
 
-        //[HttpGet]
-        //[Route("entregadores/{nome}")]
+        [HttpGet]
+        [Route("pagamentoentrega/{id}")]
+        public async Task<IActionResult> getByIdAsync(//consulta por id
+            [FromServices] Contexto contexto,
+            [FromRoute] int id)
+        {
+            var pagamentoEntrega = await contexto
+                .PagamentoEntregas
+                .AsNoTracking()
+                .FirstOrDefaultAsync(e => e.Id == id);
 
-        //public async Task<IActionResult> getByIdAsync(//consulta por nome
-        //    [FromServices] Contexto contexto,
-        //    [FromRoute] string nome)
-        //{
-        //    var entregador = await contexto
-        //        .Entregadores
-        //        .AsNoTracking()
-        //        .FirstOrDefaultAsync(e => e.Nome == nome);
+            return pagamentoEntrega == null ? NotFound() : Ok(pagamentoEntrega);
+        }
 
-        //    return entregador == null ? NotFound() : Ok(entregador);
-        //}
+        [HttpPost]
+        [Route("pagamentoentrega")]
+        public async Task<IActionResult> PostAsync(//cadastro
+            [FromServices] Contexto contexto,
+            [FromBody] PagamentoEntrega pagamentoEntrega)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest();
+            }
 
+            try
+            {
+                await contexto.PagamentoEntregas.AddAsync(pagamentoEntrega);
+                await contexto.SaveChangesAsync();
+                return Created($"api/pagamentoentrega/{pagamentoEntrega.Id}", pagamentoEntrega);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
 
-        //[HttpPost]
-        //[Route("entregadores")]
+        [HttpPut]
+        [Route("pagamentoentrega/{id}")]
+        public async Task<IActionResult> PutAsync(//editar
+            [FromServices] Contexto contexto,
+            [FromBody] PagamentoEntrega pagamentoEntrega,
+            [FromRoute] int id)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest("Model inválida");
+            var e = await contexto.PagamentoEntregas
+                .FirstOrDefaultAsync(x => x.Id == id);
 
-        //public async Task<IActionResult> PostAsync(//cadastro
-        //    [FromServices] Contexto contexto,
-        //    [FromBody] Models.Entregadores entregador)
-        //{
-        //    if (!ModelState.IsValid)
-        //    {
-        //        return BadRequest();
-        //    }
+            if (e == null)
+                return NotFound("PagamentoEntrega não encontrado");
 
-        //    try
-        //    {
-        //        await contexto.Entregadores.AddAsync(entregador);
-        //        await contexto.SaveChangesAsync();
-        //        return Created($"api/entregadores/{entregador.Id}", entregador);
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        return BadRequest(ex.Message);
-        //    }
-        //}
+            try
+            {
+                e.FkEntrega = pagamentoEntrega.FkEntrega;
+                e.FkPagamento = pagamentoEntrega.FkPagamento;
+                e.Quantidade = pagamentoEntrega.Quantidade;
 
-        //[HttpPut]
-        //[Route("entregadores/{id}")]
-        //public async Task<IActionResult> PutAsync(//editar
-        //    [FromServices] Contexto contexto,
-        //    [FromBody] Models.Entregadores entregador,
-        //    [FromRoute] int id)
-        //{
-        //    if (!ModelState.IsValid)
-        //        return BadRequest("Model inválida");
-        //    var e = await contexto.Entregadores
-        //        .FirstOrDefaultAsync(x => x.Id == id);
+                contexto.PagamentoEntregas.Update(e);
+                await contexto.SaveChangesAsync();
+                return Ok(e);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
 
-        //    if (e == null)
-        //        return NotFound("Pessoa não encontrada");
+        [HttpDelete]
+        [Route("pagamentoentrega/{id}")]
+        public async Task<IActionResult> DeleteAsync(//deletar
+            [FromServices] Contexto contexto,
+            [FromRoute] int id)
+        {
+            var e = await contexto.PagamentoEntregas
+                .FirstOrDefaultAsync(x => x.Id == id);
 
-        //    try
-        //    {
-        //        e.Nome = entregador.Nome;
-        //        e.Sobrenome = entregador.Sobrenome;
-        //        e.Pix = entregador.Pix;
-        //        e.Situacao = entregador.Situacao;
+            if (e == null)
+                return NotFound("PagamentoEntrega não encontrado");
 
-        //        contexto.Entregadores.Update(e);
-        //        await contexto.SaveChangesAsync();
-        //        return Ok(e);
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        return BadRequest(ex.Message);
-        //    }
-        //}
-
-        //[HttpDelete]
-        //[Route("entregadores/{id}")]
-        //public async Task<IActionResult> DeleteAsync(//deletar
-        //    [FromServices] Contexto contexto,
-        //    [FromRoute] int id)
-        //{
-        //    var e = await contexto.Entregadores
-        //        .FirstOrDefaultAsync(x => x.Id == id);
-
-        //    if (e == null)
-        //        return NotFound("Pessoa não encontrada");
-
-        //    try
-        //    {
-        //        contexto.Entregadores.Remove(e);
-        //        await contexto.SaveChangesAsync();
-        //        return Ok();
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        return BadRequest(ex.Message);
-        //    }
-        //}
+            try
+            {
+                contexto.PagamentoEntregas.Remove(e);
+                await contexto.SaveChangesAsync();
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
     }
 }

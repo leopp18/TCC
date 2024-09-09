@@ -10,8 +10,9 @@ public partial class Cidade
     public string? Nome { get; set; }
 
     public int FkEstado { get; set; }
+    public bool? Situacao { get; set; }
 
-    public virtual Estado FkEstadoNavigation { get; set; } = null!;
+    public virtual Estado? FkEstadoNavigation { get; set; }
 
     public virtual ICollection<Pagamento> Pagamentos { get; set; } = new List<Pagamento>();
 }

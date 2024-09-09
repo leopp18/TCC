@@ -11,7 +11,9 @@ public partial class Entrega
 
     public decimal? Valor { get; set; }
 
-    public virtual ICollection<EntregadorEntrega> EntregadorEntregas { get; set; } = new List<EntregadorEntrega>();
+    public bool? Situacao { get; set; }
 
     public virtual ICollection<PagamentoEntrega> PagamentoEntregas { get; set; } = new List<PagamentoEntrega>();
+
+    public virtual ICollection<EntregadorEntrega> EntregadorEntregas { get; set; } = new List<EntregadorEntrega>();
 }

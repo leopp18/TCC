@@ -50,6 +50,7 @@ public partial class Contexto : DbContext
                 .HasMaxLength(35)
                 .IsUnicode(false)
                 .HasColumnName("nome");
+            entity.Property(e => e.Situacao).HasColumnName("situacao");
 
             entity.HasOne(d => d.FkEstadoNavigation).WithMany(p => p.Cidades)
                 .HasForeignKey(d => d.FkEstado)
@@ -68,6 +69,7 @@ public partial class Contexto : DbContext
                 .HasMaxLength(20)
                 .IsUnicode(false)
                 .HasColumnName("nome");
+            entity.Property(e => e.Situacao).HasColumnName("situacao");
             entity.Property(e => e.Valor)
                 .HasColumnType("money")
                 .HasColumnName("valor");

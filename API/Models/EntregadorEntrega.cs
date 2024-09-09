@@ -11,7 +11,7 @@ public partial class EntregadorEntrega
 
     public int FkEntrega { get; set; }
 
-    public virtual Entrega FkEntregaNavigation { get; set; } = null!;
+    public virtual Entrega? FkEntregaNavigation { get; set; }
 
-    public virtual Entregadores FkEntregadorNavigation { get; set; } = null!;
+    public virtual Entregadores? FkEntregadorNavigation { get; set; }
 }
