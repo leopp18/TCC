@@ -1,0 +1,185 @@
+﻿@page "/precos"
+@rendermode InteractiveServer
+
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject IJSRuntime JS
+
+<h3>Preços</h3>
+
+<table class="table table-striped table-bordered">
+    <thead class="thead-dark">
+        <tr>
+            <th>#</th>
+            <th>Nome do Entregador</th>
+            <th>Tipos de Entrega</th>
+            <th>Ações</th>
+        </tr>
+    </thead>
+    <tbody>
+        @if (entregadores != null && entregas != null)
+        {
+            int index = 1;
+            foreach (var entregador in entregadores)
+            {
+                <tr>
+                    <td>@index</td>
+                    <td>@entregador.Nome @entregador.Sobrenome</td>
+                    <td>
+                        <div class="entregas-wrapper">
+                            @foreach (var grupo in entregasAgrupadas)
+                            {
+                                <div>
+                                    <label>@grupo.Key</label>
+                                    <select @onchange="@(e => OnEntregaChange(entregador.Id, grupo.Key, decimal.Parse(e?.Value?.ToString() ?? "0")))">
+
+                                        @foreach (var entrega in grupo)
+                                        {
+                                            <option value="@entrega.Valor" selected="@(IsSelected(entregador.Id, entrega.Id) ? "selected" : null)">
+                                                @entrega.Valor.ToString("F2")
+                                            </option>
+                                        }
+                                    </select>
+                                </div>
+                            }
+                        </div>
+                    </td>
+                    <td>
+                        <button class="btn btn-primary" @onclick="@(async () => await SaveMudanca(entregador.Id))">Salvar</button>
+                    </td>
+                </tr>
+                index++;
+            }
+        }
+    </tbody>
+</table>
+
+<select onchange="handleSelectChange(this)">
+    <option value="1">One</option>
+    <option value="2">Two</option>
+    <option value="3">Three</option>
+    <option value="4">Four</option>
+</select>
+
+@code {
+    private List<Entregador> entregadores = new List<Entregador>();
+    private List<Entrega> entregas = new List<Entrega>();
+    private List<EntregadorEntrega> entregadorEntregaAssociations = new List<EntregadorEntrega>();
+    private Dictionary<int, Dictionary<string, decimal>> selectedValues = new Dictionary<int, Dictionary<string, decimal>>();
+
+    private IEnumerable<IGrouping<string?, Entrega>> entregasAgrupadas => entregas.GroupBy(e => e.Nome);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEntregadores();
+        await LoadEntregas();
+        await LoadAssociations();
+    }
+
+    private async Task LoadEntregadores()
+    {
+        entregadores = await Http.GetFromJsonAsync<List<Entregador>>("https://localhost:7083/api/Entregador/entregadores") ?? new List<Entregador>();
+        entregadores = entregadores.Where(e => e.Situacao).ToList(); // Filtrar apenas entregadores ativos
+        entregadores = entregadores.OrderBy(e => e.Nome).ToList();
+    }
+
+    private async Task LoadEntregas()
+    {
+        entregas = await Http.GetFromJsonAsync<List<Entrega>>("https://localhost:7083/api/Entrega/entregas") ?? new List<Entrega>();
+        entregas = entregas.Where(e => e.Situacao).ToList(); // Filtrar apenas entregas ativas
+        entregas = entregas.OrderBy(e => e.Nome).ThenBy(e => e.Valor).ToList();
+    }
+
+    private async Task LoadAssociations()
+    {
+        entregadorEntregaAssociations = await Http.GetFromJsonAsync<List<EntregadorEntrega>>("https://localhost:7083/api/EntrEnt/entregador_entrega") ?? new List<EntregadorEntrega>();
+    }
+
+    public void OnEntregaChange(int entregadorId, string entregaNome, decimal novoValor)
+    {
+        if (!selectedValues.ContainsKey(entregadorId))
+        {
+            selectedValues[entregadorId] = new Dictionary<string, decimal>();
+        }
+        selectedValues[entregadorId][entregaNome] = novoValor;
+    }
+
+    private async Task SaveMudanca(int entregadorId)
+    {
+        if (selectedValues.ContainsKey(entregadorId))
+        {
+            foreach (var kvp in selectedValues[entregadorId])
+            {
+                var entregaNome = kvp.Key;
+                var novoValor = kvp.Value;
+
+                // Encontrar a entrega correspondente pelo nome e valor
+                var entrega = entregas.FirstOrDefault(e => e.Nome == entregaNome && e.Valor == novoValor);
+                if (entrega != null)
+                {
+                    // Verificar se já existe uma associação com a entrega específica
+                    var association = entregadorEntregaAssociations.FirstOrDefault(e => e.FkEntregador == entregadorId && e.FkEntrega == entrega.Id);
+
+                    if (association != null)
+                    {
+                        // Atualizar a associação existente
+                        association.FkEntrega = entrega.Id;
+                        await Http.PutAsJsonAsync($"https://localhost:7083/api/EntrEnt/entregador_entrega/{association.Id}", association);
+                    }
+                    else
+                    {
+                        // Verificar se já existe uma associação com o mesmo nome de entrega
+                        var existingAssociation = entregadorEntregaAssociations.FirstOrDefault(e => e.FkEntregador == entregadorId && entregas.Any(ent => ent.Id == e.FkEntrega && ent.Nome == entregaNome));
+                        if (existingAssociation != null)
+                        {
+                            // Atualizar a associação existente com o novo valor
+                            existingAssociation.FkEntrega = entrega.Id;
+                            await Http.PutAsJsonAsync($"https://localhost:7083/api/EntrEnt/entregador_entrega/{existingAssociation.Id}", existingAssociation);
+                        }
+                        else
+                        {
+                            // Adicionar nova associação
+                            association = new EntregadorEntrega { FkEntregador = entregadorId, FkEntrega = entrega.Id };
+                            entregadorEntregaAssociations.Add(association);
+                            await Http.PostAsJsonAsync("https://localhost:7083/api/EntrEnt/entregador_entrega", association);
+                        }
+                    }
+                }
+            }
+
+            // Limpar as seleções após salvar
+            selectedValues.Remove(entregadorId);
+        }
+    }
+
+
+    private bool IsSelected(int entregadorId, int entregaId)
+    {
+        var association = entregadorEntregaAssociations.FirstOrDefault(e => e.FkEntregador == entregadorId && e.FkEntrega == entregaId);
+        return association != null;
+    }
+
+    public class Entregador
+    {
+        public int Id { get; set; }
+        public string? Nome { get; set; }
+        public string? Sobrenome { get; set; }
+        public string? Pix { get; set; }
+        public bool Situacao { get; set; }
+    }
+
+    public class Entrega
+    {
+        public int Id { get; set; }
+        public string? Nome { get; set; }
+        public decimal Valor { get; set; }
+        public bool Situacao { get; set; }
+    }
+
+    public class EntregadorEntrega
+    {
+        public int Id { get; set; }
+        public int FkEntregador { get; set; }
+        public int FkEntrega { get; set; }
+    }
+}

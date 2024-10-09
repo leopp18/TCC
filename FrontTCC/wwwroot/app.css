@@ -64,7 +64,11 @@ h1:focus {
 
 .id-coluna {
     width: 20px; /* Largura para a coluna de id */
-    display: flex;
-    justify-content: center;
 }
+
+.entregas-wrapper {
+    display: flex;
+    gap: 20px; /* Espaçamento entre os selects */
+}
+
 

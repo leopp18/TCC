@@ -47,7 +47,6 @@ namespace API_TCC.Controllers
 
         [HttpPost]
         [Route("entregadores")]
-
         public async Task<IActionResult> PostAsync(//cadastro
             [FromServices] Contexto contexto,
             [FromBody] Models.Entregadores entregador)
@@ -59,12 +58,15 @@ namespace API_TCC.Controllers
 
             try
             {
+                contexto.ChangeTracker.AutoDetectChangesEnabled = false;
                 await contexto.Entregadores.AddAsync(entregador);
                 await contexto.SaveChangesAsync();
+                contexto.ChangeTracker.AutoDetectChangesEnabled = true; // Reativar a detecção automática de mudanças
                 return Created($"api/entregadores/{entregador.Id}", entregador);
             }
             catch (Exception ex)
             {
+                contexto.ChangeTracker.AutoDetectChangesEnabled = true; // Reativar a detecção automática de mudanças em caso de erro
                 return BadRequest(ex.Message);
             }
         }

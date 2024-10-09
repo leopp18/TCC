@@ -66,10 +66,10 @@
             </div>
             <div class="form-group">
                 <label for="status">Status</label>
-                <select class="form-control" id="status" @bind="newEntregador.Situacao">
-                    <option value="true">Ativo</option>
-                    <option value="false">Inativo</option>
-                </select>
+                <Select @bind-SelectedValue="@newEntregador.Situacao">
+                    <SelectItem Value="true">Ativo</SelectItem>
+                    <SelectItem Value="false">Inativo</SelectItem>
+                </Select>
             </div>
         </ModalBody>
         <ModalFooter>
@@ -138,11 +138,11 @@
         {
             if (isEditMode)
             {
-                await Http.PutAsJsonAsync($"https://localhost:7083/api/Entregador/{newEntregador.Id}", newEntregador);
+                await Http.PutAsJsonAsync($"https://localhost:7083/api/Entregador/entregadores{newEntregador.Id}", newEntregador);
             }
             else
             {
-                await Http.PostAsJsonAsync("https://localhost:7083/api/Entregador", newEntregador);
+                await Http.PostAsJsonAsync("https://localhost:7083/api/Entregador/entregadores", newEntregador);
             }
             await LoadEntregadores();
             showNewDeliveryPersonModal = false;

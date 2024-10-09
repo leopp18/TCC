@@ -8,7 +8,6 @@ namespace API_TCC.Controllers
     [ApiController]
     public class EntrEntController : ControllerBase
     {
-
         private readonly IJWTAuthenticationManager jwtAuthenticationManager;
 
         public EntrEntController(IJWTAuthenticationManager jwtAuthenticationManager)
@@ -16,112 +15,93 @@ namespace API_TCC.Controllers
             this.jwtAuthenticationManager = jwtAuthenticationManager;
         }
 
-        //[HttpGet]
-        //[Route("entregadores")]
-        //public async Task<IActionResult> getAllAsync(//consulta geral
-        //    [FromServices] Contexto contexto)
-        //{
-        //    var e = await contexto
-        //        .Entregadores
-        //        .AsNoTracking()
-        //        .ToListAsync();
-        //    return e == null ? NotFound() : Ok(e);
-        //}
+        [HttpGet]
+        [Route("entregador_entrega")]
+        public async Task<IActionResult> getAllAsync(//consulta geral
+            [FromServices] Contexto contexto)
+        {
+            var e = await contexto
+                .EntregadorEntregas
+                .AsNoTracking()
+                .ToListAsync();
+            return e == null ? NotFound() : Ok(e);
+        }
 
-        //[HttpGet]
-        //[Route("entregadores/{nome}")]
+        [HttpPost]
+        [Route("entregador_entrega")]
+        public async Task<IActionResult> PostAsync(//cadastro
+            [FromServices] Contexto contexto,
+            [FromBody] Models.EntregadorEntrega entregadorEntrega)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest();
+            }
 
-        //public async Task<IActionResult> getByIdAsync(//consulta por nome
-        //    [FromServices] Contexto contexto,
-        //    [FromRoute] string nome)
-        //{
-        //    var entregador = await contexto
-        //        .Entregadores
-        //        .AsNoTracking()
-        //        .FirstOrDefaultAsync(e => e.Nome == nome);
+            try
+            {
+                await contexto.EntregadorEntregas.AddAsync(entregadorEntrega);
+                await contexto.SaveChangesAsync();
+                return Created($"api/entregador_entrega/{entregadorEntrega.Id}", entregadorEntrega);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
 
-        //    return entregador == null ? NotFound() : Ok(entregador);
-        //}
+        [HttpPut]
+        [Route("entregador_entrega/{id}")]
+        public async Task<IActionResult> PutAsync(//editar
+            [FromServices] Contexto contexto,
+            [FromBody] Models.EntregadorEntrega entregadorEntrega,
+            [FromRoute] int id)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest("Model inválida");
+            var e = await contexto.EntregadorEntregas
+                .FirstOrDefaultAsync(x => x.Id == id);
 
+            if (e == null)
+                return NotFound("EntregadorEntrega não encontrado");
 
-        //[HttpPost]
-        //[Route("entregadores")]
+            try
+            {
+                e.FkEntregador = entregadorEntrega.FkEntregador;
+                e.FkEntrega = entregadorEntrega.FkEntrega;
 
-        //public async Task<IActionResult> PostAsync(//cadastro
-        //    [FromServices] Contexto contexto,
-        //    [FromBody] Models.Entregadores entregador)
-        //{
-        //    if (!ModelState.IsValid)
-        //    {
-        //        return BadRequest();
-        //    }
+                contexto.EntregadorEntregas.Update(e);
+                await contexto.SaveChangesAsync();
+                return Ok(e);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
 
-        //    try
-        //    {
-        //        await contexto.Entregadores.AddAsync(entregador);
-        //        await contexto.SaveChangesAsync();
-        //        return Created($"api/entregadores/{entregador.Id}", entregador);
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        return BadRequest(ex.Message);
-        //    }
-        //}
+        [HttpDelete]
+        [Route("entregador_entrega/{id}")]
+        public async Task<IActionResult> DeleteAsync(//deletar
+            [FromServices] Contexto contexto,
+            [FromRoute] int id)
+        {
+            var e = await contexto.EntregadorEntregas
+                .FirstOrDefaultAsync(x => x.Id == id);
 
-        //[HttpPut]
-        //[Route("entregadores/{id}")]
-        //public async Task<IActionResult> PutAsync(//editar
-        //    [FromServices] Contexto contexto,
-        //    [FromBody] Models.Entregadores entregador,
-        //    [FromRoute] int id)
-        //{
-        //    if (!ModelState.IsValid)
-        //        return BadRequest("Model inválida");
-        //    var e = await contexto.Entregadores
-        //        .FirstOrDefaultAsync(x => x.Id == id);
+            if (e == null)
+                return NotFound("EntregadorEntrega não encontrado");
 
-        //    if (e == null)
-        //        return NotFound("Pessoa não encontrada");
-
-        //    try
-        //    {
-        //        e.Nome = entregador.Nome;
-        //        e.Sobrenome = entregador.Sobrenome;
-        //        e.Pix = entregador.Pix;
-        //        e.Situacao = entregador.Situacao;
-
-        //        contexto.Entregadores.Update(e);
-        //        await contexto.SaveChangesAsync();
-        //        return Ok(e);
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        return BadRequest(ex.Message);
-        //    }
-        //}
-
-        //[HttpDelete]
-        //[Route("entregadores/{id}")]
-        //public async Task<IActionResult> DeleteAsync(//deletar
-        //    [FromServices] Contexto contexto,
-        //    [FromRoute] int id)
-        //{
-        //    var e = await contexto.Entregadores
-        //        .FirstOrDefaultAsync(x => x.Id == id);
-
-        //    if (e == null)
-        //        return NotFound("Pessoa não encontrada");
-
-        //    try
-        //    {
-        //        contexto.Entregadores.Remove(e);
-        //        await contexto.SaveChangesAsync();
-        //        return Ok();
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        return BadRequest(ex.Message);
-        //    }
-        //}
+            try
+            {
+                contexto.EntregadorEntregas.Remove(e);
+                await contexto.SaveChangesAsync();
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
     }
 }

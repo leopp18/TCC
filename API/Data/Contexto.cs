@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using API_TCC.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace API_TCC.Data;
 

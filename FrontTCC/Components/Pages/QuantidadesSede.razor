@@ -73,6 +73,10 @@
         {
             entregas = await Http.GetFromJsonAsync<List<Entrega>>("https://localhost:7083/api/Entrega/entregas") ?? new List<Entrega>();
             entregas = entregas.Where(e => e.Situacao).ToList(); // Filtrar apenas entregas ativas
+            entregas = entregas
+                .GroupBy(e => e.Nome) // Agrupa por nome
+                .Select(g => g.First()) // Seleciona o primeiro item de cada grupo
+                .ToList();
             Console.WriteLine($"Entregas carregadas: {entregas.Count}");
         }
         catch (Exception ex)

@@ -25,10 +25,11 @@
     <TableBody>
         @if (entregas != null)
         {
+            int index = 0;
             @foreach (var entrega in entregas)
             {
                 <TableRow>
-                    <TableRowHeader>@entrega.Id</TableRowHeader>
+                    <TableRowHeader>@index</TableRowHeader>
                     <TableRowCell>@entrega.Nome</TableRowCell>
                     <TableRowCell>@entrega.Valor.ToString("C")</TableRowCell>
                     <TableRowCell>@(entrega.Situacao ? "Ativo" : "Inativo")</TableRowCell>
@@ -37,6 +38,7 @@
                         <button class="btn btn-danger btn-sm" @onclick="() => OnDeleteClicked(entrega.Id)"><i class="bi bi-trash"></i></button>
                     </TableRowCell>
                 </TableRow>
+                index++;
             }
         }
     </TableBody>
@@ -90,6 +92,7 @@
         try
         {
             entregas = await Http.GetFromJsonAsync<List<Entrega>>("https://localhost:7083/api/Entrega/entregas") ?? new List<Entrega>();
+            entregas = entregas.OrderBy(e => e.Nome).ThenBy(e => e.Valor).ToList();
         }
         catch (Exception ex)
         {

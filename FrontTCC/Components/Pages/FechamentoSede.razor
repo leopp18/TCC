@@ -70,7 +70,7 @@
     <TableBody>
         @if (entregadores != null && pagamentos != null)
         {
-            int rowIndex = 1;
+            int rowIndex = 0;
             foreach (var entregador in entregadores)
             {
                 var pagamento = pagamentos.FirstOrDefault(p => p.EntregadorId == entregador.Id) ?? new Pagamento
