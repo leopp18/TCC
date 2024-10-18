@@ -1,7 +1,54 @@
 ﻿@page "/quantidades-sede"
-@using System.Net.Http.Json
+@rendermode InteractiveServer
+
 @inject HttpClient Http
 
+<PageTitle>Quantidades Sede</PageTitle>
+
+<h1>Quantidades Sede</h1>
+
+<EditForm Model="filtroPagamento" OnValidSubmit="LoadQuantidades">
+    <div class="form-row d-flex justify-content-between">
+        <div class="form-group col-md-3 d-flex align-items-center">
+            <label class="mr-2">Quinzena:</label>
+            <div>
+                <RadioGroup TValue="int" @bind-CheckedValue="filtroPagamento.Quinzena">
+                    <Radio Value="1">1ª quinzena</Radio>
+                    <Radio Value="2">2ª quinzena</Radio>
+                </RadioGroup>
+            </div>
+        </div>
+        <div class="form-group col-md-3 d-flex align-items-center">
+            <label class="mr-2">Mês:</label>
+            <InputSelect @bind-Value="filtroPagamento.Mes">
+                <option value="1">Janeiro</option>
+                <option value="2">Fevereiro</option>
+                <option value="3">Março</option>
+                <option value="4">Abril</option>
+                <option value="5">Maio</option>
+                <option value="6">Junho</option>
+                <option value="7">Julho</option>
+                <option value="8">Agosto</option>
+                <option value="9">Setembro</option>
+                <option value="10">Outubro</option>
+                <option value="11">Novembro</option>
+                <option value="12">Dezembro</option>
+            </InputSelect>
+        </div>
+        <div class="form-group col-md-3 d-flex align-items-center">
+            <label class="mr-2">Ano:</label>
+            <InputSelect @bind-Value="filtroPagamento.Ano">
+                @foreach (var ano in Enumerable.Range(2024, DateTime.Now.Year - 2023))
+                {
+                    <option value="@ano">@ano</option>
+                }
+            </InputSelect>
+        </div>
+        <div class="form-group col-md-3 align-self-end">
+            <button type="submit" class="btn btn-primary">Buscar</button>
+        </div>
+    </div>
+</EditForm>
 <Table Striped Bordered Editable>
     <TableHeader ThemeContrast="ThemeContrast.Dark">
         <TableRow>
@@ -14,43 +61,42 @@
         </TableRow>
     </TableHeader>
     <TableBody>
-        @if (items != null && entregadores != null)
+        @if (entregadores != null)
         {
             int rowIndex = 1;
-            foreach (var item in items)
+            foreach (var entregador in entregadores)
             {
-                var entregador = entregadores.FirstOrDefault(e => e.Id == item.EntregadorId);
-                if (entregador != null)
-                {
-                    <tr>
-                        <td>@rowIndex</td>
-                        <td>@entregador.Nome @entregador.Sobrenome</td>
-                        @for (int i = 0; i < entregas.Count; i++)
-                        {
-                            <td>
-                                <TextEdit Plaintext @bind-Value="item.Quantidades[i]" />
-                            </td>
-                        }
-                    </tr>
-                }
+                <tr @key="entregador.Id">
+                    <td>@rowIndex</td>
+                    <td>@entregador.Nome @entregador.Sobrenome</td>
+                    @foreach (var entrega in entregas)
+                    {
+                        <td @key="entrega.Id">
+                            <NumericEdit Plaintext TValue="int" Value="@GetQuantidade(entregador, entrega)" ValueChanged ="@(async (valor) => await OnQuantidadeChanged(entregador, entrega, valor))" />
+
+                        </td>
+                    }
+                </tr>
                 rowIndex++;
             }
         }
     </TableBody>
 </Table>
 
-<button class="btn btn-primary" @onclick="SaveQuantidades">Salvar</button>
-
 @code {
-    private List<Item> items = new List<Item>();
     private List<Entregador> entregadores = new List<Entregador>();
     private List<Entrega> entregas = new List<Entrega>();
+    private List<PagamentoEntrega> pagamentoEntregas = new List<PagamentoEntrega>();
+    private List<Pagamento> pagamentos = new List<Pagamento>();
+
+    private FiltroPagamento filtroPagamento = new FiltroPagamento();
+    private CancellationTokenSource? debounceCts;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadEntregadores();
         await LoadEntregas();
-        InitializeItems();
+        await LoadQuantidades();
     }
 
     private async Task LoadEntregadores()
@@ -76,7 +122,8 @@
             entregas = entregas
                 .GroupBy(e => e.Nome) // Agrupa por nome
                 .Select(g => g.First()) // Seleciona o primeiro item de cada grupo
-                .ToList();
+                .OrderBy(e => e.Nome)
+                .ThenBy(e => e.Valor).ToList();
             Console.WriteLine($"Entregas carregadas: {entregas.Count}");
         }
         catch (Exception ex)
@@ -85,35 +132,189 @@
         }
     }
 
-    private void InitializeItems()
-    {
-        foreach (var entregador in entregadores)
-        {
-            var item = new Item { EntregadorId = entregador.Id, Quantidades = new List<string>(new string[entregas.Count]) };
-            items.Add(item);
-        }
-        Console.WriteLine($"Itens inicializados: {items.Count}");
-    }
-
-    private async Task SaveQuantidades()
+    private async Task LoadQuantidades()
     {
         try
         {
-            var quantidadesToSave = new List<QuantidadeDto>();
-            foreach (var item in items)
+            Console.WriteLine("Filtro quinzena: " + filtroPagamento.Quinzena);
+            Console.WriteLine("Filtro mês: " + filtroPagamento.Mes);
+            // Calcular a data correta com base na quinzena, mês e ano selecionados
+            DateOnly data;
+            if (filtroPagamento.Quinzena == 1)
             {
-                for (int i = 0; i < entregas.Count; i++)
-                {
-                    quantidadesToSave.Add(new QuantidadeDto
-                    {
-                        PagamentoId = item.EntregadorId, // Supondo que o ID do pagamento seja o mesmo do entregador por enquanto
-                        EntregaId = entregas[i].Id,
-                        Quantidade = int.TryParse(item.Quantidades[i], out var q) ? q : 0
-                    });
-                }
+                data = new DateOnly(filtroPagamento.Ano, filtroPagamento.Mes, 1);
+            }
+            else if (filtroPagamento.Quinzena == 2)
+            {
+                data = new DateOnly(filtroPagamento.Ano, filtroPagamento.Mes, 16);
+            }
+            else
+            {
+                data = new DateOnly(filtroPagamento.Ano, filtroPagamento.Mes, 2);
             }
 
-            await Http.PostAsJsonAsync("https://localhost:7083/api/Quantidade", quantidadesToSave);
+            // Fazer a requisição para a API com o parâmetro de data
+            pagamentos = await Http.GetFromJsonAsync<List<Pagamento>>(
+                $"https://localhost:7083/api/Pagamento/pagamentos/{data.ToString("yyyy-MM-dd")}") ?? new List<Pagamento>();
+
+            // Limpar as quantidades antigas
+            foreach (var entregador in entregadores)
+            {
+                entregador.Quantidades?.Clear();
+            }
+
+            // Atualizar as quantidades com os novos dados
+            foreach (var pagamento in pagamentos)
+            {
+                var entregador = entregadores.FirstOrDefault(e => e.Id == pagamento.FkEntregador);
+                if (entregador != null)
+                {
+                    var pagamentoEntregas = await Http.GetFromJsonAsync<List<PagamentoEntrega>>(
+                        $"https://localhost:7083/api/PagEnt/pagamentoentrega/pagamento/{pagamento.Id}") ?? new List<PagamentoEntrega>();
+
+                    foreach (var pagamentoEntrega in pagamentoEntregas)
+                    {
+                        var entrega = entregas.FirstOrDefault(e => e.Id == pagamentoEntrega.FkEntrega);
+                        if (entrega != null && entrega.Nome != null)
+                        {
+                            entregador.Quantidades![entrega.Nome] = pagamentoEntrega.Quantidade;
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Erro ao carregar quantidades: {ex.Message}");
+        }
+    }
+
+    private async Task BuscarQuantidades()
+    {
+        await LoadQuantidades();
+    }
+
+    private async Task<int> EnsurePagamentoExists(int fkEntregador, DateOnly data)
+    {
+        try
+        {
+            // Verificar se o registro de pagamento já existe
+            var response = await Http.GetAsync(
+                $"https://localhost:7083/api/Pagamento/pagamentos/{data.ToString("yyyy-MM-dd")}/{fkEntregador}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var pagamentoResponse = await response.Content.ReadFromJsonAsync<List<Pagamento>>() ?? new List<Pagamento>();
+                foreach (var pagamento in pagamentoResponse)
+                {
+                    if (pagamento != null)
+                    {
+                        return pagamento.Id;
+                    }
+                }
+                // Se chegou aqui, significa que não encontrou um pagamento válido
+                throw new PagamentoNaoEncontradoException("Pagamento não encontrado para a data e entregador especificados.");
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                // Se o status for 404, lança a exceção personalizada
+                throw new PagamentoNaoEncontradoException("Pagamento não encontrado para a data e entregador especificados.");
+            }
+            else
+            {
+                response.EnsureSuccessStatusCode();
+            }
+            return 0;
+        }
+        catch (PagamentoNaoEncontradoException)
+        {
+            // Se o pagamento não for encontrado, cria um novo pagamento
+            var novoPagamento = new Pagamento
+                {
+                    FkEntregador = fkEntregador,
+                    Periodo = data,
+                    FkCidade = 1,
+                    Adicional = null,
+                    Desconto = null,
+                    Adiantamento = null,
+                    Pago = false,
+                    NotaFiscal = false
+                };
+
+            Console.WriteLine($"Criando novo pagamento: {System.Text.Json.JsonSerializer.Serialize(novoPagamento)}");
+
+            var response = await Http.PostAsJsonAsync("https://localhost:7083/api/Pagamento/pagamentos", novoPagamento);
+            response.EnsureSuccessStatusCode();
+
+            var createdPagamento = await response.Content.ReadFromJsonAsync<Pagamento>();
+            return createdPagamento?.Id ?? 0;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Erro ao verificar/criar pagamento: {ex.Message}");
+            return 0;
+        }
+    }
+
+
+    public class PagamentoNaoEncontradoException : Exception
+    {
+        public PagamentoNaoEncontradoException(string message) : base(message) { }
+    }
+
+
+    private async Task SaveQuantidades(Entregador entregador, Entrega entrega, int valor)
+    {
+        try
+        {
+            DateOnly data = filtroPagamento.Quinzena == 1
+                ? new DateOnly(filtroPagamento.Ano, filtroPagamento.Mes, 1)
+                : new DateOnly(filtroPagamento.Ano, filtroPagamento.Mes, 16);
+
+            // Verificar e garantir que o registro de pagamento existe
+            int pagamentoId = await EnsurePagamentoExists(entregador.Id, data);
+            if (pagamentoId == 0)
+            {
+                Console.WriteLine($"Erro ao criar/verificar pagamento para entregador {entregador.Id}");
+                return;
+            }
+
+            var pagamentoEntregas = await Http.GetFromJsonAsync<List<PagamentoEntrega>>(
+                        $"https://localhost:7083/api/PagEnt/pagamentoentrega/{data.ToString("yyyy-MM-dd")}") ?? new List<PagamentoEntrega>();
+
+            // Verificar se a quantidade já existe
+            var existingPagamentoEntrega = pagamentoEntregas.FirstOrDefault(pe =>
+                pe.FkPagamento == pagamentoId && pe.FkEntrega == entrega.Id && pe.Periodo == data);
+
+            if (existingPagamentoEntrega != null)
+            {
+                // Atualizar a quantidade existente
+                existingPagamentoEntrega.Quantidade = valor;
+                var response = await Http.PutAsJsonAsync($"https://localhost:7083/api/PagEnt/pagamentoentrega/{existingPagamentoEntrega.Id}", existingPagamentoEntrega);
+                response.EnsureSuccessStatusCode();
+                Console.WriteLine($"Quantidade atualizada: Pagamento: {existingPagamentoEntrega.FkPagamento}, Entrega: {existingPagamentoEntrega.FkEntrega}, Quantidade: {existingPagamentoEntrega.Quantidade}, Período: {existingPagamentoEntrega.Periodo}");
+            }
+            else
+            {
+                // Criar uma nova quantidade
+                var newPagamentoEntrega = new PagamentoEntrega
+                    {
+                        FkPagamento = pagamentoId,
+                        FkEntrega = entrega.Id,
+                        Quantidade = valor,
+                        Periodo = data
+                    };
+
+                var response = await Http.PostAsJsonAsync("https://localhost:7083/api/PagEnt/pagamentoentrega", newPagamentoEntrega);
+                response.EnsureSuccessStatusCode();
+                Console.WriteLine($"Nova quantidade inserida: Pagamento: {newPagamentoEntrega.FkPagamento}, Entrega: {newPagamentoEntrega.FkEntrega}, Quantidade: {newPagamentoEntrega.Quantidade}, Período: {newPagamentoEntrega.Periodo}");
+            }
+
+            // Atualizar o dicionário Quantidades do entregador
+            if (entrega.Nome != null)
+            {
+                entregador.Quantidades![entrega.Nome] = valor;
+            }
         }
         catch (Exception ex)
         {
@@ -121,10 +322,50 @@
         }
     }
 
-    public class Item
+
+    private async Task OnQuantidadeChanged(Entregador entregador, Entrega entrega, int valor)
     {
-        public int EntregadorId { get; set; }
-        public List<string> Quantidades { get; set; } = new List<string>();
+        // Atualizar a tabela imediatamente
+        if (entrega.Nome != null)
+        {
+            entregador.Quantidades![entrega.Nome] = valor;
+        }
+
+        // Cancelar o token anterior, se existir
+        debounceCts?.Cancel();
+        debounceCts = new CancellationTokenSource();
+
+        try
+        {
+            // Aguardar 2,5 segundos antes de continuar
+            await Task.Delay(2500, debounceCts.Token);
+
+            // Se o token não foi cancelado, continuar com a execução
+            Console.WriteLine("Valor capturado: " + valor.ToString());
+
+            if (int.TryParse(valor.ToString(), out int quantidade))
+            {
+                await SaveQuantidades(entregador, entrega, quantidade);
+            }
+            else
+            {
+                Console.WriteLine("Valor inválido para quantidade.");
+            }
+        }
+        catch (TaskCanceledException)
+        {
+            // Ignorar a exceção se a tarefa foi cancelada
+        }
+    }
+
+
+    private int GetQuantidade(Entregador entregador, Entrega entrega)
+    {
+        if (entrega.Nome != null && entregador.Quantidades != null)
+        {
+            return entregador.Quantidades.TryGetValue(entrega.Nome, out var quantidade) ? quantidade : 0;
+        }
+        return 0;
     }
 
     public class Entregador
@@ -134,6 +375,7 @@
         public string? Sobrenome { get; set; }
         public string? Pix { get; set; }
         public bool Situacao { get; set; }
+        public Dictionary<string, int>? Quantidades { get; set; } = new Dictionary<string, int>();
     }
 
     public class Entrega
@@ -144,10 +386,32 @@
         public bool Situacao { get; set; }
     }
 
-    public class QuantidadeDto
+    public class FiltroPagamento
     {
-        public int PagamentoId { get; set; }
-        public int EntregaId { get; set; }
+        public int Quinzena { get; set; } = 1;
+        public int Mes { get; set; } = DateTime.Now.Month;
+        public int Ano { get; set; } = DateTime.Now.Year;
+    }
+
+    public class Pagamento
+    {
+        public int Id { get; set; }
+        public decimal? Adicional { get; set; }
+        public decimal? Desconto { get; set; }
+        public decimal? Adiantamento { get; set; }
+        public bool? Pago { get; set; }
+        public bool? NotaFiscal { get; set; }
+        public int FkCidade { get; set; }
+        public int FkEntregador { get; set; }
+        public DateOnly Periodo { get; set; }
+    }
+
+    public class PagamentoEntrega
+    {
+        public int Id { get; set; }
         public int Quantidade { get; set; }
+        public int FkEntrega { get; set; }
+        public int FkPagamento { get; set; }
+        public DateOnly Periodo { get; set; }
     }
 }
