@@ -1,4 +1,5 @@
-﻿@page "/fechamento-sede"
+@page "/fechamento-sede"
+@using System.Net
 @rendermode InteractiveServer
 
 @inject IJSRuntime JS
@@ -8,12 +9,12 @@
 
 <h1>Fechamento Sede</h1>
 
-<EditForm Model="@filtro" OnValidSubmit="BuscarPagamentos">
+<EditForm Model="filtroPagamento" OnValidSubmit="BuscarPagamentos">
     <div class="form-row d-flex justify-content-between">
         <div class="form-group col-md-3 d-flex align-items-center">
             <label class="mr-2">Quinzena:</label>
             <div>
-                <RadioGroup TValue="int" Name="quinzena">
+                <RadioGroup TValue="int" @bind-CheckedValue="filtroPagamento.Quinzena">
                     <Radio Value="@(1)">1ª quinzena</Radio>
                     <Radio Value="@(2)">2ª quinzena</Radio>
                 </RadioGroup>
@@ -21,7 +22,7 @@
         </div>
         <div class="form-group col-md-3 d-flex align-items-center">
             <label class="mr-2">Mês:</label>
-            <InputSelect @bind-Value="filtro.Mes">
+            <InputSelect @bind-Value="filtroPagamento.Mes">
                 <option value="1">Janeiro</option>
                 <option value="2">Fevereiro</option>
                 <option value="3">Março</option>
@@ -38,7 +39,7 @@
         </div>
         <div class="form-group col-md-3 d-flex align-items-center">
             <label class="mr-2">Ano:</label>
-            <InputSelect @bind-Value="filtro.Ano">
+            <InputSelect @bind-Value="filtroPagamento.Ano">
                 @foreach (var ano in Enumerable.Range(2024, DateTime.Now.Year - 2023))
                 {
                     <option value="@ano">@ano</option>
@@ -63,8 +64,9 @@
             <TableHeaderCell class="soma-coluna">Adicional</TableHeaderCell>
             <TableHeaderCell class="soma-coluna">Valor Líquido</TableHeaderCell>
             <TableHeaderCell class="id-coluna">Envio</TableHeaderCell>
+            <TableHeaderCell class="id-coluna">Nota Fiscal</TableHeaderCell>
             <TableHeaderCell class="id-coluna">Operação</TableHeaderCell>
-            <TableHeaderCell class="id-coluna">Pago</TableHeaderCell>
+            <TableHeaderCell class="id-coluna">Pago</TableHeaderCell> <!-- Nova coluna -->
         </TableRow>
     </TableHeader>
     <TableBody>
@@ -73,33 +75,41 @@
             int rowIndex = 0;
             foreach (var entregador in entregadores)
             {
-                var pagamento = pagamentos.FirstOrDefault(p => p.EntregadorId == entregador.Id) ?? new Pagamento
+                var pagamento = pagamentos.FirstOrDefault(p => p.FkEntregador == entregador.Id) ?? new Pagamento
                             {
-                                EntregadorId = entregador.Id,
+                                FkEntregador = entregador.Id,
                                 Desconto = 0,
                                 Adiantamento = 0,
                                 Adicional = 0,
-                                ValorLiquido = entregador.ValorBruto,
-                                Pago = false
+                                Pago = false,
+                                NotaFiscal = false, // Valor padrão
+                                Periodo = DateOnly.FromDateTime(DateTime.Now) // Definir um valor padrão
                             };
+
+                decimal valorBruto = CalcularValorBruto(entregador.Id, pagamento.Periodo);
+                decimal valorLiquido = valorBruto - pagamento.Desconto.GetValueOrDefault() - pagamento.Adiantamento.GetValueOrDefault() + pagamento.Adicional.GetValueOrDefault();
 
                 <TableRow class="@GetRowClass(pagamento.Pago)">
                     <TableRowHeader class="id-coluna">@rowIndex</TableRowHeader>
                     <TableRowCell class="nome-coluna">@entregador.Nome @entregador.Sobrenome</TableRowCell>
                     <TableRowCell class="nome-coluna">@entregador.Pix</TableRowCell>
-                    <TableRowCell class="soma-coluna">@entregador.ValorBruto</TableRowCell>
+                    <TableRowCell class="soma-coluna">@valorBruto.ToString("C")</TableRowCell>
                     <TableRowCell class="soma-coluna">
-                        <TextEdit Plaintext @bind-Value="pagamento.Desconto" @onchange="() => UpdateValorLiquido(pagamento, entregador)" />
+                        <NumericEdit Plaintext @bind-Value="pagamento.Desconto" @onchange="() => UpdateValorLiquido(pagamento, entregador)" />
                     </TableRowCell>
                     <TableRowCell class="soma-coluna">
-                        <TextEdit Plaintext @bind-Value="pagamento.Adiantamento" @onchange="() => UpdateValorLiquido(pagamento, entregador)" />
+                        <NumericEdit Plaintext @bind-Value="pagamento.Adiantamento" @onchange="() => UpdateValorLiquido(pagamento, entregador)"  />
                     </TableRowCell>
                     <TableRowCell class="soma-coluna">
-                        <TextEdit Plaintext @bind-Value="pagamento.Adicional" @onchange="() => UpdateValorLiquido(pagamento, entregador)" />
+                        <NumericEdit Plaintext @bind-Value="pagamento.Adicional" @onchange="() => UpdateValorLiquido(pagamento, entregador)"  />
                     </TableRowCell>
-                    <TableRowCell class="soma-coluna">@pagamento.ValorLiquido</TableRowCell>
+                    <TableRowCell class="soma-coluna">@valorLiquido.ToString("C")</TableRowCell>
                     <TableRowCell class="id-coluna">
-                        <button class="btn btn-success btn-sm"><i class="bi bi-whatsapp"></i></button>
+                        <button class="btn btn-success btn-sm" @onclick="() => EnviarMensagemWhatsApp(entregador)"><i class="bi bi-whatsapp"></i>
+                        </button>
+                    </TableRowCell>
+                    <TableRowCell class="id-coluna">
+                        <Check TValue="bool" Checked="@pagamento.NotaFiscal" CheckedChanged="@(value => OnNotaFiscalChanged(pagamento, value))"></Check> 
                     </TableRowCell>
                     <TableRowCell class="id-coluna">
                         <button class="btn btn-secondary btn-sm" @onclick="() => copyText(entregador.Pix)"><i class="bi bi-clipboard"></i></button>
@@ -107,6 +117,7 @@
                     <TableRowCell class="id-coluna">
                         <Check TValue="bool" Checked="@pagamento.Pago" CheckedChanged="@(value => OnPagoChanged(pagamento, value))"></Check>
                     </TableRowCell>
+                    
                 </TableRow>
                 rowIndex++;
             }
@@ -114,22 +125,11 @@
     </TableBody>
 </Table>
 
-
 @code {
-    private async Task copyText(string operacao)
-    {
-        await JS.InvokeVoidAsync("navigator.clipboard.writeText", operacao);
-    }
-
     private List<Entregador> entregadores;
     private List<Pagamento> pagamentos;
 
-    private FiltroPagamento filtro = new FiltroPagamento
-        {
-            Quinzena = 1,
-            Mes = DateTime.Now.Month,
-            Ano = DateTime.Now.Year
-        };
+    private FiltroPagamento filtroPagamento = new FiltroPagamento();
 
     protected override async Task OnInitializedAsync()
     {
@@ -154,7 +154,20 @@
     {
         try
         {
-            pagamentos = await Http.GetFromJsonAsync<List<Pagamento>>($"https://localhost:7083/api/Pagamento/pagamentos?quinzena={filtro.Quinzena}&mes={filtro.Mes}&ano={filtro.Ano}") ?? new List<Pagamento>();
+            // Calcular a data correta com base na quinzena, mês e ano selecionados
+            DateTime data;
+            if (filtroPagamento.Quinzena == 1)
+            {
+                data = new DateTime(filtroPagamento.Ano, filtroPagamento.Mes, 1);
+            }
+            else
+            {
+                data = new DateTime(filtroPagamento.Ano, filtroPagamento.Mes, 16);
+            }
+
+            // Fazer a requisição para a API com o parâmetro de data
+            pagamentos = await Http.GetFromJsonAsync<List<Pagamento>>(
+                $"https://localhost:7083/api/Pagamento/pagamentos/{data.ToString("yyyy-MM-dd")}") ?? new List<Pagamento>();
         }
         catch (Exception ex)
         {
@@ -168,10 +181,61 @@
         await LoadPagamentos();
     }
 
+    private async Task EnviarMensagemWhatsApp(Entregador entregador)
+    {
+        // if (string.IsNullOrEmpty(entregador.Celular))
+        // {
+        //     // Adicionar um tratamento de erro adequado aqui
+        //     Console.WriteLine("Número de celular não disponível.");
+        //     return;
+        // }
+
+        // string token = "SEU_TOKEN_DE_ACESSO"; // Substitua pelo seu token de acesso
+        // string url = "https://graph.facebook.com/v13.0/SEU_NUMERO_DE_TELEFONE_ID/messages"; // Substitua pelo seu número de telefone ID
+
+        // var mensagem = new
+        // {
+        //     messaging_product = "whatsapp",
+        //     to = entregador.Celular,
+        //     type = "text",
+        //     text = new
+        //     {
+        //         body = $"Olá {entregador.Nome}, seu pagamento foi processado."
+        //     }
+        // };
+
+        // var requestMessage = new HttpRequestMessage(HttpMethod.Post, url);
+        // requestMessage.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        // requestMessage.Content = new StringContent(JsonSerializer.Serialize(mensagem), Encoding.UTF8, "application/json");
+
+        // var response = await Http.SendAsync(requestMessage);
+
+        // if (response.IsSuccessStatusCode)
+        // {
+        //     Console.WriteLine("Mensagem enviada com sucesso.");
+        // }
+        // else
+        // {
+        //     Console.WriteLine($"Erro ao enviar mensagem: {response.ReasonPhrase}");
+        // }
+    }
+
+
+    private async Task copyText(string operacao)
+    {
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", operacao);
+    }
+
     private void OnPagoChanged(Pagamento pagamento, bool value)
     {
         pagamento.Pago = value;
-        Http.PutAsJsonAsync($"https://localhost:7083/api/Pagamento/{pagamento.Id}", pagamento);
+        Http.PutAsJsonAsync($"https://localhost:7083/api/Pagamento/pagamentos/{pagamento.Id}", pagamento);
+    }
+
+    private void OnNotaFiscalChanged(Pagamento pagamento, bool value)
+    {
+        pagamento.NotaFiscal = value;
+        Http.PutAsJsonAsync($"https://localhost:7083/api/Pagamento/pagamentos/{pagamento.Id}", pagamento);
     }
 
     private string GetRowClass(bool pago)
@@ -181,35 +245,126 @@
 
     private void UpdateValorLiquido(Pagamento pagamento, Entregador entregador)
     {
-        pagamento.ValorLiquido = entregador.ValorBruto - pagamento.Desconto - pagamento.Adiantamento + pagamento.Adicional;
-        Http.PutAsJsonAsync($"https://localhost:7083/api/Pagamento/{pagamento.Id}", pagamento);
+        decimal valorBruto = CalcularValorBruto(entregador.Id, pagamento.Periodo);
+        pagamento.ValorLiquido = valorBruto - pagamento.Desconto.GetValueOrDefault() - pagamento.Adiantamento.GetValueOrDefault() + pagamento.Adicional.GetValueOrDefault();
+        Http.PutAsJsonAsync($"https://localhost:7083/api/Pagamento/pagamentos/{pagamento.Id}", pagamento);
     }
+
+    private decimal CalcularValorBruto(int entregadorId, DateOnly periodo)
+    {
+        decimal valorBruto = 0;
+
+        // Obter os pagamentos do entregador para o período especificado
+        var responsePagamentos = Http.GetAsync(
+            $"https://localhost:7083/api/Pagamento/pagamentos/{periodo.ToString("yyyy-MM-dd")}/{entregadorId}")
+            .Result;
+
+        if (responsePagamentos.StatusCode == HttpStatusCode.NotFound)
+        {
+            // throw new Exception("Pagamentos não encontrados para o entregador e período especificados.");
+            return valorBruto;
+        }
+
+        var pagamentos = responsePagamentos.Content.ReadFromJsonAsync<List<Pagamento>>().Result;
+
+        // Verificar se pagamentos é nulo
+        if (pagamentos == null)
+        {
+            return valorBruto;
+        }
+
+        foreach (var pagamento in pagamentos)
+        {
+            // Obter as quantidades da tabela PagamentoEntrega para cada pagamento
+            var responsePagamentoEntregas = Http.GetAsync(
+                $"https://localhost:7083/api/PagEnt/pagamentoentrega/pagamento/{pagamento.Id}")
+                .Result;
+
+            if (responsePagamentoEntregas.StatusCode == HttpStatusCode.NotFound)
+            {
+                // throw new Exception("PagamentoEntrega não encontrado para o pagamento especificado.");
+                return valorBruto;
+            }
+
+            var pagamentoEntregas = responsePagamentoEntregas.Content.ReadFromJsonAsync<List<PagamentoEntrega>>().Result;
+
+            foreach (var pagamentoEntrega in pagamentoEntregas)
+            {
+                // Obter o valor da entrega da tabela Entrega
+                var responseEntrega = Http.GetAsync(
+                    $"https://localhost:7083/api/Entrega/entregas/id/{pagamentoEntrega.FkEntrega}")
+                    .Result;
+
+                if (responseEntrega.StatusCode == HttpStatusCode.NotFound)
+                {
+                    // throw new Exception("Entrega não encontrada para o ID especificado.");
+                    return valorBruto;
+                }
+
+                var entrega = responseEntrega.Content.ReadFromJsonAsync<Entrega>().Result;
+
+                if (entrega != null)
+                {
+                    valorBruto += pagamentoEntrega.Quantidade * entrega.Valor;
+                }
+            }
+        }
+
+        return valorBruto;
+    }
+
+
 
     public class Entregador
     {
         public int Id { get; set; }
         public string Nome { get; set; }
-        public string Sobrenome { get; set; }
-        public string Pix { get; set; }
-        public decimal ValorBruto { get; set; }
+        public string? Sobrenome { get; set; }
+        public string? Pix { get; set; }
         public bool Situacao { get; set; } // Mapeado para bit no banco de dados
     }
 
     public class Pagamento
     {
         public int Id { get; set; }
-        public int EntregadorId { get; set; }
-        public decimal Desconto { get; set; }
-        public decimal Adiantamento { get; set; }
-        public decimal Adicional { get; set; }
-        public decimal ValorLiquido { get; set; }
+        public decimal? Adicional { get; set; }
+        public decimal? Desconto { get; set; }
+        public decimal? Adiantamento { get; set; }
         public bool Pago { get; set; }
+        public bool NotaFiscal { get; set; }
+        public int FkCidade { get; set; }
+        public int FkEntregador { get; set; }
+        public DateOnly Periodo { get; set; }
+        public decimal ValorLiquido { get; set; }
+    }
+
+    public class PagamentoEntrega
+    {
+        public int Id { get; set; }
+        public int FkEntrega { get; set; }
+        public int FkPagamento { get; set; }
+        public int Quantidade { get; set; }
+        public DateOnly Periodo { get; set; }
+    }
+
+    public class EntregadorEntrega
+    {
+        public int Id { get; set; }
+        public int FkEntregador { get; set; }
+        public int FkEntrega { get; set; }
+        public decimal Valor { get; set; }
+    }
+
+    public class Entrega
+    {
+        public int Id { get; set; }
+        public decimal Valor { get; set; }
     }
 
     public class FiltroPagamento
     {
-        public int Quinzena { get; set; }
-        public int Mes { get; set; }
-        public int Ano { get; set; }
+        public int Quinzena { get; set; } = 1;
+        public int Mes { get; set; } = DateTime.Now.Month;
+        public int Ano { get; set; } = DateTime.Now.Year;
     }
 }

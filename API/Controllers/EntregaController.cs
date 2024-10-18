@@ -31,8 +31,7 @@ namespace API_TCC.Controllers
 
         [HttpGet]
         [Route("entregas/{nome}")]
-
-        public async Task<IActionResult> getByIdAsync(//consulta por nome
+        public async Task<IActionResult> getByNomeAsync(//consulta por nome
             [FromServices] Contexto contexto,
             [FromRoute] string nome)
         {
@@ -40,6 +39,20 @@ namespace API_TCC.Controllers
                 .Entregas
                 .AsNoTracking()
                 .FirstOrDefaultAsync(e => e.Nome == nome);
+
+            return entrega == null ? NotFound() : Ok(entrega);
+        }
+
+        [HttpGet]
+        [Route("entregas/id/{id}")]
+        public async Task<IActionResult> getByIdAsync(//consulta por nome
+            [FromServices] Contexto contexto,
+            [FromRoute] int id)
+        {
+            var entrega = await contexto
+                .Entregas
+                .AsNoTracking()
+                .FirstOrDefaultAsync(e => e.Id == id);
 
             return entrega == null ? NotFound() : Ok(entrega);
         }

@@ -29,25 +29,41 @@ namespace API_TCC.Controllers
             return e == null ? NotFound() : Ok(e);
         }
 
-        //[HttpGet]
-        //[Route("pagamentos/{nome}")]
+        [HttpGet]
+        [Route("pagamentos/{periodo}")]
+        public async Task<IActionResult> getByPeriodoAsync(//consulta por periodo
+            [FromServices] Contexto contexto,
+            [FromRoute] DateOnly periodo)
+        {
+            var pagamento = await contexto
+                .Pagamentos
+                .AsNoTracking()
+                .Where(e => e.Periodo == periodo)
+                .ToListAsync();
 
-        //public async Task<IActionResult> getByIdAsync(//consulta por nome
-        //    [FromServices] Contexto contexto,
-        //    [FromRoute] string nome)
-        //{
-        //    var pagamento = await contexto
-        //        .Pagamentos
-        //        .AsNoTracking()
-        //        .FirstOrDefaultAsync(e => e.Nome == nome);
+            return pagamento == null ? NotFound() : Ok(pagamento);
+        }
 
-        //    return pagamento == null ? NotFound() : Ok(pagamento);
-        //}
+
+        [HttpGet]
+        [Route("pagamentos/{periodo}/{entregadorId}")]
+        public async Task<IActionResult> getByPeriodoAndEntregadorAsync(
+            [FromServices] Contexto contexto,
+            [FromRoute] DateOnly periodo,
+            [FromRoute] int entregadorId)
+        {
+            var pagamentos = await contexto
+                .Pagamentos
+                .AsNoTracking()
+                .Where(e => e.Periodo == periodo && e.FkEntregador == entregadorId)
+                .ToListAsync();
+
+            return pagamentos == null || !pagamentos.Any() ? NotFound() : Ok(pagamentos);
+        }
 
 
         [HttpPost]
         [Route("pagamentos")]
-
         public async Task<IActionResult> PostAsync(//cadastro
             [FromServices] Contexto contexto,
             [FromBody] Pagamento pagamento)

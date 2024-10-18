@@ -21,11 +21,11 @@ public partial class Pagamento
 
     public int FkEntregador { get; set; }
 
-    public DateOnly? Periodo { get; set; }
+    public DateOnly Periodo { get; set; }
 
-    public virtual Cidade FkCidadeNavigation { get; set; } = null!;
+    public virtual Cidade? FkCidadeNavigation { get; set; } = null!;
 
-    public virtual Entregadores FkEntregadorNavigation { get; set; } = null!;
+    public virtual Entregadores? FkEntregadorNavigation { get; set; } = null!;
 
     public virtual ICollection<PagamentoEntrega> PagamentoEntregas { get; set; } = new List<PagamentoEntrega>();
 }
