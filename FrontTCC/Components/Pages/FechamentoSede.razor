@@ -1,6 +1,8 @@
 ﻿@page "/fechamento-sede"
 @using System.Net
 @using Microsoft.AspNetCore.Components.Authorization
+@inject FrontTCC.Services.WhatsAppService WhatsAppService
+
 @rendermode InteractiveServer
 
 @inject AuthenticationStateProvider AuthenticationStateProvider
@@ -250,41 +252,34 @@ else
 
     private async Task EnviarMensagemWhatsApp(Entregador entregador)
     {
-        // if (string.IsNullOrEmpty(entregador.Celular))
-        // {
-        //     // Adicionar um tratamento de erro adequado aqui
-        //     Console.WriteLine("Número de celular não disponível.");
-        //     return;
-        // }
+        if (entregador != null && !string.IsNullOrWhiteSpace(entregador.Celular))
+        {
+            try
+            {
+                var pagamento = pagamentos.FirstOrDefault(p => p.FkEntregador == entregador.Id);
+                if (pagamento == null) return;
 
-        // string token = "SEU_TOKEN_DE_ACESSO"; // Substitua pelo seu token de acesso
-        // string url = "https://graph.facebook.com/v13.0/SEU_NUMERO_DE_TELEFONE_ID/messages"; // Substitua pelo seu número de telefone ID
+                decimal valorBruto = CalcularValorBruto(entregador.Id, pagamento.Periodo);
+                decimal valorLiquido = valorBruto - pagamento.Desconto.GetValueOrDefault() - pagamento.Adiantamento.GetValueOrDefault() + pagamento.Adicional.GetValueOrDefault();
 
-        // var mensagem = new
-        // {
-        //     messaging_product = "whatsapp",
-        //     to = entregador.Celular,
-        //     type = "text",
-        //     text = new
-        //     {
-        //         body = $"Olá {entregador.Nome}, seu pagamento foi processado."
-        //     }
-        // };
+                string mensagem = $"Olá {entregador.Nome}! Segue fechamento referente a {filtroPagamento.Quinzena}ª quinzena de {filtroPagamento.Mes}/{filtroPagamento.Ano}\n\n" +
+                                  $"Valor Bruto: {valorBruto:C}\n" +
+                                  $"Desconto: {pagamento.Desconto.GetValueOrDefault():C}\n" +
+                                  $"Adiantamento: {pagamento.Adiantamento.GetValueOrDefault():C}\n" +
+                                  $"Adicional: {pagamento.Adicional.GetValueOrDefault():C}\n" +
+                                  $"Valor Líquido: *{valorLiquido:C}*";
 
-        // var requestMessage = new HttpRequestMessage(HttpMethod.Post, url);
-        // requestMessage.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-        // requestMessage.Content = new StringContent(JsonSerializer.Serialize(mensagem), Encoding.UTF8, "application/json");
-
-        // var response = await Http.SendAsync(requestMessage);
-
-        // if (response.IsSuccessStatusCode)
-        // {
-        //     Console.WriteLine("Mensagem enviada com sucesso.");
-        // }
-        // else
-        // {
-        //     Console.WriteLine($"Erro ao enviar mensagem: {response.ReasonPhrase}");
-        // }
+                await WhatsAppService.OpenWhatsAppChat(entregador.Celular, mensagem);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Erro ao enviar mensagem: {ex.Message}");
+            }
+        }
+        else
+        {
+            Console.WriteLine("Número de telefone inválido ou entregador nulo.");
+        }
     }
 
     private async Task copyText(string operacao)
