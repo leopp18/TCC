@@ -1,7 +1,33 @@
-﻿@page "/"
+﻿@page "/home"
+@rendermode InteractiveServer
+
+@using Blazorise
+@using Microsoft.AspNetCore.Components.Authorization
+
+@inject HttpClient Http
+@inject IJSRuntime JS
+@inject AuthenticationStateProvider AuthenticationStateProvider
 
 <PageTitle>Home</PageTitle>
 
 <h1>Bem-vindo!</h1>
 
-Welcome to your new app.
+Seja bem-vindo ao Sistema de Gerenciamento de Pagamentos da empresa!
+
+@code {
+    private string token;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            token = await JS.InvokeAsync<string>("localStorage.getItem", "authToken");
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            var permissaoClaim = user.Claims.FirstOrDefault(c => c.Type == "permissao");
+
+            StateHasChanged(); 
+        }
+    }
+}

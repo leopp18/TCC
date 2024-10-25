@@ -1,5 +1,6 @@
-
+﻿
 using API_TCC.Data;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -7,6 +8,7 @@ namespace API_TCC.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class EntregadorController : ControllerBase
     {
 
@@ -91,6 +93,7 @@ namespace API_TCC.Controllers
                 e.Nome = entregador.Nome;
                 e.Sobrenome = entregador.Sobrenome;
                 e.Pix = entregador.Pix;
+                e.Celular = entregador.Celular;
                 e.Situacao = entregador.Situacao;
 
                 contexto.Entregadores.Update(e);

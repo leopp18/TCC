@@ -1,7 +1,10 @@
 ﻿using API_TCC.Data;
 using API_TCC.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
+using BCrypt.Net;
 
 namespace API_TCC.Controllers
 {
@@ -9,12 +12,54 @@ namespace API_TCC.Controllers
     [ApiController]
     public class UsuarioController : ControllerBase
     {
-
         private readonly IJWTAuthenticationManager jwtAuthenticationManager;
+        private readonly Contexto _context;
 
-        public UsuarioController(IJWTAuthenticationManager jwtAuthenticationManager)
+        public UsuarioController(IJWTAuthenticationManager jwtAuthenticationManager, Contexto context)
         {
             this.jwtAuthenticationManager = jwtAuthenticationManager;
+            _context = context;
+        }
+
+        [HttpPost]
+        [Route("auth/login")]
+        [AllowAnonymous]
+        public async Task<IActionResult> LoginAsync([FromBody] Usuario usuario)
+        {
+            if (usuario == null || string.IsNullOrEmpty(usuario.Nome) || string.IsNullOrEmpty(usuario.Senha))
+            {
+                return BadRequest("Nome e senha são obrigatórios.");
+            }
+
+            var authResponse = await jwtAuthenticationManager.AuthenticateAsync(usuario.Nome, usuario.Senha);
+
+            if (authResponse == null)
+                return Unauthorized("Nome ou senha inválidos");
+
+            return Ok(authResponse);
+        }
+
+        [HttpGet]
+        [Route("auth/me")]
+        [Authorize]
+        public async Task<IActionResult> GetMeAsync()
+        {
+            var nome = User.FindFirstValue(ClaimTypes.Name);
+            if (nome == null)
+                return Unauthorized();
+
+            var usuario = await _context.Usuarios
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Nome == nome);
+
+            if (usuario == null)
+                return NotFound("Usuário não encontrado");
+
+            return Ok(new
+            {
+                usuario.Nome,
+                usuario.Permissao
+            });
         }
 
         [HttpGet]
@@ -29,28 +74,11 @@ namespace API_TCC.Controllers
             return e == null ? NotFound() : Ok(e);
         }
 
-        [HttpGet]
-        [Route("usuarios/{nome}")]
-
-        public async Task<IActionResult> getByIdAsync(//consulta por nome
-            [FromServices] Contexto contexto,
-            [FromRoute] string nome)
-        {
-            var usuario = await contexto
-                .Usuarios
-                .AsNoTracking()
-                .FirstOrDefaultAsync(e => e.Nome == nome);
-
-            return usuario == null ? NotFound() : Ok(usuario);
-        }
-
-
         [HttpPost]
         [Route("usuarios")]
-
-        public async Task<IActionResult> PostAsync(//cadastro
-            [FromServices] Contexto contexto,
-            [FromBody] Usuario usuario)
+        public async Task<IActionResult> PostAsync(
+        [FromServices] Contexto contexto,
+        [FromBody] Models.Usuario usuario)
         {
             if (!ModelState.IsValid)
             {
@@ -59,25 +87,34 @@ namespace API_TCC.Controllers
 
             try
             {
+                contexto.ChangeTracker.AutoDetectChangesEnabled = false;
+
+                // Criptografar a senha antes de salvar
+                usuario.Senha = BCrypt.Net.BCrypt.HashPassword(usuario.Senha);
+
                 await contexto.Usuarios.AddAsync(usuario);
                 await contexto.SaveChangesAsync();
+                contexto.ChangeTracker.AutoDetectChangesEnabled = true; // Reativar a detecção automática de mudanças
                 return Created($"api/usuarios/{usuario.Id}", usuario);
             }
             catch (Exception ex)
             {
+                contexto.ChangeTracker.AutoDetectChangesEnabled = true; // Reativar a detecção automática de mudanças em caso de erro
                 return BadRequest(ex.Message);
             }
         }
 
         [HttpPut]
         [Route("usuarios/{id}")]
-        public async Task<IActionResult> PutAsync(//editar
-            [FromServices] Contexto contexto,
-            [FromBody] Usuario usuario,
-            [FromRoute] int id)
+        [Authorize]
+        public async Task<IActionResult> PutAsync(
+        [FromServices] Contexto contexto,
+        [FromBody] Usuario usuario,
+        [FromRoute] int id)
         {
             if (!ModelState.IsValid)
                 return BadRequest("Model inválida");
+
             var e = await contexto.Usuarios
                 .FirstOrDefaultAsync(x => x.Id == id);
 
@@ -87,8 +124,13 @@ namespace API_TCC.Controllers
             try
             {
                 e.Nome = usuario.Nome;
-                e.Senha = usuario.Senha;
-                e.Permissao = usuario.Permissao; //criptografar aqui?
+
+                if (!string.IsNullOrWhiteSpace(usuario.Senha))
+                {
+                    e.Senha = BCrypt.Net.BCrypt.HashPassword(usuario.Senha);
+                }
+
+                e.Permissao = usuario.Permissao;
 
                 contexto.Usuarios.Update(e);
                 await contexto.SaveChangesAsync();
@@ -102,6 +144,7 @@ namespace API_TCC.Controllers
 
         [HttpDelete]
         [Route("usuarios/{id}")]
+        [Authorize]
         public async Task<IActionResult> DeleteAsync(//deletar
             [FromServices] Contexto contexto,
             [FromRoute] int id)

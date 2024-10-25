@@ -112,6 +112,10 @@ public partial class Contexto : DbContext
                 .HasMaxLength(100)
                 .IsUnicode(false)
                 .HasColumnName("pix");
+            entity.Property(e => e.Celular)
+                .HasMaxLength(15)
+                .IsUnicode(false)
+                .HasColumnName("celular");
             entity.Property(e => e.Situacao).HasColumnName("situacao");
             entity.Property(e => e.Sobrenome)
                 .HasMaxLength(20)
@@ -179,6 +183,7 @@ public partial class Contexto : DbContext
             entity.Property(e => e.FkEntrega).HasColumnName("fk_entrega");
             entity.Property(e => e.FkPagamento).HasColumnName("fk_pagamento");
             entity.Property(e => e.Quantidade).HasColumnName("quantidade");
+            entity.Property(e => e.Periodo).HasColumnName("periodo");
 
             entity.HasOne(d => d.FkEntregaNavigation).WithMany(p => p.PagamentoEntregas)
                 .HasForeignKey(d => d.FkEntrega)

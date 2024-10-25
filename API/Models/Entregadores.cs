@@ -13,6 +13,8 @@ public partial class Entregadores
 
     public string? Pix { get; set; }
 
+    public string? Celular { get; set; }
+
     public bool? Situacao { get; set; }
 
     public virtual ICollection<EntregadorEntrega> EntregadorEntregas { get; set; } = new List<EntregadorEntrega>();

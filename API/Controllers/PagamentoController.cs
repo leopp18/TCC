@@ -8,6 +8,7 @@ namespace API_TCC.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class PagamentoController : ControllerBase
     {
         private readonly IJWTAuthenticationManager jwtAuthenticationManager;
@@ -28,6 +29,7 @@ namespace API_TCC.Controllers
                 .ToListAsync();
             return e == null ? NotFound() : Ok(e);
         }
+
 
         [HttpGet]
         [Route("pagamentos/{periodo}")]

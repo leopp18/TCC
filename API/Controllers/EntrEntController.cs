@@ -1,4 +1,5 @@
 ﻿using API_TCC.Data;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -6,6 +7,7 @@ namespace API_TCC.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class EntrEntController : ControllerBase
     {
         private readonly IJWTAuthenticationManager jwtAuthenticationManager;

@@ -1,0 +1,221 @@
+﻿@page "/usuarios"
+@rendermode InteractiveServer
+
+@using Blazorise
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@inject HttpClient Http
+@inject IJSRuntime JS
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Usuários</PageTitle>
+
+<h1>Usuários</h1>
+
+<Alert @bind-Visible="showAlert" Color="@alertColor">
+    @alertMessage
+    <CloseButton />
+</Alert>
+
+@if (permissao == "1")
+{
+    <div class="d-flex justify-content-end mb-3">
+        <button class="btn btn-success" @onclick="ShowNewUserModal"><i class="bi bi-plus-circle"></i></button>
+    </div>
+
+    <Table Striped Bordered>
+        <TableHeader ThemeContrast="ThemeContrast.Dark">
+            <TableRow>
+                <TableHeaderCell>#</TableHeaderCell>
+                <TableHeaderCell>Nome de Usuário</TableHeaderCell>
+                <TableHeaderCell>Permissão</TableHeaderCell>
+                <TableHeaderCell>Operações</TableHeaderCell>
+            </TableRow>
+        </TableHeader>
+        <TableBody>
+            @if (usuarios != null)
+            {
+                int rowIndex = 0;
+                @foreach (var usuario in usuarios)
+                {
+                    <tr>
+                        <td><strong>@rowIndex</strong></td>
+                        <td>@usuario.Nome</td>
+                        <td>@usuario.Permissao</td>
+                        <td>
+                            <button class="btn btn-primary btn-sm" @onclick="() => ShowEditUserModal(usuario)"><i class="bi bi-pencil"></i></button>
+                            <button class="btn btn-danger btn-sm" @onclick="() => OnDeleteClicked(usuario.Id)"><i class="bi bi-trash"></i></button>
+                        </td>
+                    </tr>
+                    rowIndex++;
+                }
+            }
+        </TableBody>
+    </Table>
+
+    <Modal @bind-Visible="showNewUserModal">
+        <ModalBackdrop />
+        <ModalContent>
+            <ModalHeader>
+                <ModalTitle>@(isEditMode ? "Editar Usuario" : "Novo Usuario")</ModalTitle>
+                <Button CloseButton @onclick="HideNewUserModal" />
+            </ModalHeader>
+            <ModalBody>
+                <div class="form-group">
+                    <label for="nome">Nome</label>
+                    <input type="text" class="form-control" id="nome" @bind="newUser.Nome" />
+                </div>
+                <div class="form-group">
+                    <label for="senha">Senha</label>
+                    <input type="password" class="form-control" id="senha" @bind="newUser.Senha" />
+                </div>
+                <div class="form-group">
+                    <label for="permissao">Permissao</label>
+                    <input type="number" class="form-control" id="permissao" @bind="newUser.Permissao" />
+                </div>
+            </ModalBody>
+            <ModalFooter>
+                <Button Color="Color.Primary" @onclick="SaveNewUser">Salvar</Button>
+                <Button Color="Color.Secondary" @onclick="HideNewUserModal">Cancelar</Button>
+            </ModalFooter>
+        </ModalContent>
+    </Modal>
+}
+else
+{
+    <p>Você não tem permissão para acessar esta página.</p>
+}
+
+@code {
+    private bool showNewUserModal = false;
+    private bool isEditMode = false;
+    private List<Usuario> usuarios = new List<Usuario>();
+    private Usuario newUser = new Usuario();
+    private string token = string.Empty;
+    private string permissao = string.Empty;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            token = await JS.InvokeAsync<string>("localStorage.getItem", "authToken");
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            // Obtenha a permissão do usuário a partir das claims
+            permissao = user.FindFirst(c => c.Type == "permissao")?.Value;
+
+            if (permissao == "1")
+            {
+                await LoadUsuarios();
+            }
+
+            StateHasChanged(); 
+        }
+    }
+
+    private async Task LoadUsuarios()
+    {
+        try
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, "https://localhost:7083/api/Usuario/usuarios");
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            var response = await Http.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+            usuarios = await response.Content.ReadFromJsonAsync<List<Usuario>>() ?? new List<Usuario>();
+        }
+        catch (Exception ex)
+        {
+            ShowAlert("Erro ao carregar usuarios", Color.Danger);
+            Console.WriteLine($"Erro ao carregar usuarios: {ex.Message}");
+        }
+    }
+
+    private void ShowNewUserModal()
+    {
+        newUser = new Usuario();
+        isEditMode = false;
+        showNewUserModal = true;
+    }
+
+    private void ShowEditUserModal(Usuario usuario)
+    {
+        newUser = new Usuario
+        {
+            Id = usuario.Id,
+            Nome = usuario.Nome,
+            Senha = string.Empty,
+            Permissao = usuario.Permissao
+        };
+        isEditMode = true;
+        showNewUserModal = true;
+    }
+
+    private void HideNewUserModal()
+    {
+        showNewUserModal = false;
+    }
+
+    private async Task SaveNewUser()
+    {
+        try
+        {
+            var request = new HttpRequestMessage(isEditMode ? HttpMethod.Put : HttpMethod.Post, 
+                isEditMode ? $"https://localhost:7083/api/Usuario/usuarios/{newUser.Id}" : "https://localhost:7083/api/Usuario/usuarios");
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            request.Content = JsonContent.Create(newUser);
+
+            var response = await Http.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+
+            ShowAlert(isEditMode ? "Usuario alterado com sucesso!" : "Usuario cadastrado com sucesso!", Color.Success);
+            await LoadUsuarios();
+            showNewUserModal = false;
+        }
+        catch (Exception ex)
+        {
+            ShowAlert("Erro ao salvar usuario!", Color.Danger);
+            Console.WriteLine($"Erro ao salvar usuario: {ex.Message}");
+        }
+    }
+
+    private async Task OnDeleteClicked(int id)
+    {
+        try
+        {
+            var request = new HttpRequestMessage(HttpMethod.Delete, $"https://localhost:7083/api/Usuario/usuarios/{id}");
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            var response = await Http.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+
+            await LoadUsuarios();
+            ShowAlert("Usuario excluído com sucesso!", Color.Success);
+        }
+        catch (Exception ex)
+        {
+            ShowAlert("Erro ao excluir usuario!", Color.Danger);
+            Console.WriteLine($"Erro ao excluir usuario: {ex.Message}");
+        }
+    }
+
+    private bool showAlert = false;
+    private string alertMessage = string.Empty;
+    private Color alertColor = Color.Primary;
+
+    private void ShowAlert(string message, Color color)
+    {
+        alertMessage = message;
+        alertColor = color;
+        showAlert = true;
+    }
+
+    public class Usuario
+    {
+        public int Id { get; set; }
+        public string? Nome { get; set; }
+        public string? Senha { get; set; }
+        public int? Permissao { get; set; }
+    }
+}
+

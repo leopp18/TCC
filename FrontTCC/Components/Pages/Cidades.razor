@@ -2,83 +2,101 @@
 @rendermode InteractiveServer
 
 @using Blazorise
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
 @inject HttpClient Http
+@inject IJSRuntime JS
+@inject AuthenticationStateProvider AuthenticationStateProvider
 
 <PageTitle>Cidades</PageTitle>
 
 <h1>Cidades</h1>
 
-<div class="d-flex justify-content-end mb-3">
-    <button class="btn btn-success" @onclick="ShowNewCityModal"><i class="bi bi-plus-circle"></i></button>
-</div>
+<Alert @bind-Visible="showAlert" Color="@alertColor">
+    @alertMessage
+    <CloseButton />
+</Alert>
 
-<Table Striped Bordered>
-    <TableHeader ThemeContrast="ThemeContrast.Dark">
-        <TableRow>
-            <TableHeaderCell>#</TableHeaderCell>
-            <TableHeaderCell>Nome</TableHeaderCell>
-            <TableHeaderCell>Estado</TableHeaderCell>
-            <TableHeaderCell>Status</TableHeaderCell>
-            <TableHeaderCell>Operações</TableHeaderCell>
-        </TableRow>
-    </TableHeader>
-    <TableBody>
-        @if (cidades != null)
-        {
-            @foreach (var cidade in cidades)
+@if (permissao == "1")
+{
+    <div class="d-flex justify-content-end mb-3">
+        <button class="btn btn-success" @onclick="ShowNewCityModal"><i class="bi bi-plus-circle"></i></button>
+    </div>
+
+    <Table Striped Bordered>
+        <TableHeader ThemeContrast="ThemeContrast.Dark">
+            <TableRow>
+                <TableHeaderCell>#</TableHeaderCell>
+                <TableHeaderCell>Nome</TableHeaderCell>
+                <TableHeaderCell>Estado</TableHeaderCell>
+                <TableHeaderCell>Status</TableHeaderCell>
+                <TableHeaderCell>Operações</TableHeaderCell>
+            </TableRow>
+        </TableHeader>
+        <TableBody>
+            @if (cidades != null)
             {
-                <TableRow>
-                    <TableRowHeader>@cidade.Id</TableRowHeader>
-                    <TableRowCell>@cidade.Nome</TableRowCell>
-                    <TableRowCell>@cidade.Estado?.Sigla</TableRowCell>
-                    <TableRowCell>@(cidade.Situacao ? "Ativo" : "Inativo")</TableRowCell>
-                    <TableRowCell>
-                        <button class="btn btn-primary btn-sm" @onclick="() => ShowEditCityModal(cidade)"><i class="bi bi-pencil"></i></button>
-                        <button class="btn btn-danger btn-sm" @onclick="() => OnDeleteClicked(cidade.Id)"><i class="bi bi-trash"></i></button>
-                    </TableRowCell>
-                </TableRow>
+                int rowIndex = 1;
+                @foreach (var cidade in cidades)
+                {
+                    <tr>
+                        <td><strong>@rowIndex</strong></td>
+                        <td>@cidade.Nome</td>
+                        <td>@cidade.Estado?.Sigla</td>
+                        <td>@(cidade.Situacao ? "Ativo" : "Inativo")</td>
+                        <td>
+                            <button class="btn btn-primary btn-sm" @onclick="() => ShowEditCityModal(cidade)"><i class="bi bi-pencil"></i></button>
+                            <button class="btn btn-danger btn-sm" @onclick="() => OnDeleteClicked(cidade.Id)"><i class="bi bi-trash"></i></button>
+                        </td>
+                    </tr>
+                    rowIndex++;
+                }
             }
-        }
-    </TableBody>
-</Table>
+        </TableBody>
+    </Table>
 
-<Modal @bind-Visible="showNewCityModal">
-    <ModalBackdrop />
-    <ModalContent>
-        <ModalHeader>
-            <ModalTitle>@(isEditMode ? "Editar Cidade" : "Nova Cidade")</ModalTitle>
-            <Button CloseButton @onclick="HideNewCityModal" />
-        </ModalHeader>
-        <ModalBody>
-            <div class="form-group">
-                <label for="nome">Nome</label>
-                <input type="text" class="form-control" id="nome" @bind="newCity.Nome" />
-            </div>
-            <div class="form-group">
-                <label for="estado">Estado</label>
-                <select class="form-control" id="estado" @bind="newCity.FkEstado">
-                    <option value="">Selecione um estado</option>
-                    @foreach (var estado in estados)
-                    {
-                        <option value="@estado.Id">@estado.Nome</option>
-                    }
-                </select>
-            </div>
-            <div class="form-group">
-                <br/>
-                <label for="status">Status</label>
-                <Select @bind-SelectedValue="@newCity.Situacao">
-                    <SelectItem Value="true">Ativo</SelectItem>
-                    <SelectItem Value="false">Inativo</SelectItem>
-                </Select>
-            </div>
-        </ModalBody>
-        <ModalFooter>
-            <Button Color="Color.Primary" @onclick="SaveNewCity">Salvar</Button>
-            <Button Color="Color.Secondary" @onclick="HideNewCityModal">Cancelar</Button>
-        </ModalFooter>
-    </ModalContent>
-</Modal>
+    <Modal @bind-Visible="showNewCityModal">
+        <ModalBackdrop />
+        <ModalContent>
+            <ModalHeader>
+                <ModalTitle>@(isEditMode ? "Editar Cidade" : "Nova Cidade")</ModalTitle>
+                <Button CloseButton @onclick="HideNewCityModal" />
+            </ModalHeader>
+            <ModalBody>
+                <div class="form-group">
+                    <label for="nome">Nome</label>
+                    <input type="text" class="form-control" id="nome" @bind="newCity.Nome" />
+                </div>
+                <div class="form-group">
+                    <label for="estado">Estado</label>
+                    <select class="form-control" id="estado" @bind="newCity.FkEstado">
+                        <option value="">Selecione um estado</option>
+                        @foreach (var estado in estados)
+                        {
+                            <option value="@estado.Id">@estado.Nome</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-group">
+                    <br/>
+                    <label for="status">Status</label>
+                    <Select @bind-SelectedValue="@newCity.Situacao">
+                        <SelectItem Value="true">Ativo</SelectItem>
+                        <SelectItem Value="false">Inativo</SelectItem>
+                    </Select>
+                </div>
+            </ModalBody>
+            <ModalFooter>
+                <Button Color="Color.Primary" @onclick="SaveNewCity">Salvar</Button>
+                <Button Color="Color.Secondary" @onclick="HideNewCityModal">Cancelar</Button>
+            </ModalFooter>
+        </ModalContent>
+    </Modal>
+}
+else
+{
+    <p>Você não tem permissão para acessar esta página.</p>
+}
 
 @code {
     private bool showNewCityModal = false;
@@ -86,17 +104,27 @@
     private List<Cidade> cidades = new List<Cidade>();
     private List<Estado> estados = new List<Estado>();
     private Cidade newCity = new Cidade();
+    private string token = string.Empty;
+    private string permissao = string.Empty;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        try
+        if (firstRender)
         {
-            await LoadEstados();
-            await LoadCidades();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Erro na inicialização: {ex.Message}");
+            token = await JS.InvokeAsync<string>("localStorage.getItem", "authToken");
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            // Obtenha a permissão do usuário a partir das claims
+            permissao = user.FindFirst(c => c.Type == "permissao")?.Value;
+
+            if (permissao == "1")
+            {
+                await LoadEstados();
+                await LoadCidades();
+            }
+
+            StateHasChanged(); // Força a atualização do componente após a inicialização
         }
     }
 
@@ -104,15 +132,16 @@
     {
         try
         {
-            Console.WriteLine("Iniciando o carregamento das cidades...");
-            var cidadesResponse = await Http.GetFromJsonAsync<List<Cidade>>("https://localhost:7083/api/Cidade/cidades") ?? new List<Cidade>();
-            var estadosResponse = await Http.GetFromJsonAsync<List<Estado>>("https://localhost:7083/api/Estado/estados") ?? new List<Estado>();
-
+            var request = new HttpRequestMessage(HttpMethod.Get, "https://localhost:7083/api/Cidade/cidades");
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            var response = await Http.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+            var cidadesResponse = await response.Content.ReadFromJsonAsync<List<Cidade>>() ?? new List<Cidade>();
 
             // Associar estados às cidades
             foreach (var cidade in cidadesResponse)
             {
-                cidade.Estado = estadosResponse.FirstOrDefault(e => e.Id == cidade.FkEstado);
+                cidade.Estado = estados.FirstOrDefault(e => e.Id == cidade.FkEstado);
                 if (cidade.Estado == null)
                 {
                     Console.WriteLine($"Estado não encontrado para a cidade: {cidade.Nome} (EstadoId: {cidade.FkEstado})");
@@ -127,6 +156,7 @@
         }
         catch (Exception ex)
         {
+            ShowAlert("Erro ao carregar cidades", Color.Danger);
             Console.WriteLine($"Erro ao carregar cidades: {ex.Message}");
         }
     }
@@ -135,12 +165,15 @@
     {
         try
         {
-            Console.WriteLine("Iniciando o carregamento dos estados...");
-            estados = await Http.GetFromJsonAsync<List<Estado>>("https://localhost:7083/api/Estado/estados") ?? new List<Estado>();
-            Console.WriteLine($"Estados carregados: {estados.Count}");
+            var request = new HttpRequestMessage(HttpMethod.Get, "https://localhost:7083/api/Estado/estados");
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            var response = await Http.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+            estados = await response.Content.ReadFromJsonAsync<List<Estado>>() ?? new List<Estado>();
         }
         catch (Exception ex)
         {
+            ShowAlert("Erro ao carregar estados", Color.Danger);
             Console.WriteLine($"Erro ao carregar estados: {ex.Message}");
         }
     }
@@ -158,7 +191,7 @@
         {
             Id = cidade.Id,
             Nome = cidade.Nome,
-                FkEstado = cidade.FkEstado,
+            FkEstado = cidade.FkEstado,
             Situacao = cidade.Situacao
         };
         isEditMode = true;
@@ -174,29 +207,67 @@
     {
         try
         {
-            if (isEditMode)
-            {
-                Console.WriteLine("Id de edição: " + newCity.Id);
-                Console.WriteLine("JSON de edição: " + newCity.Nome + newCity.Situacao);
-                await Http.PutAsJsonAsync($"https://localhost:7083/api/Cidade/cidades/{newCity.Id}", newCity);
-            }
-            else
-            {
-                await Http.PostAsJsonAsync("https://localhost:7083/api/Cidade/cidades", newCity);
-            }
+            var request = new HttpRequestMessage(isEditMode ? HttpMethod.Put : HttpMethod.Post, 
+                isEditMode ? $"https://localhost:7083/api/Cidade/cidades/{newCity.Id}" : "https://localhost:7083/api/Cidade/cidades");
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            request.Content = JsonContent.Create(newCity);
+
+            var response = await Http.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+
+            ShowAlert(isEditMode ? "Cidade alterada com sucesso!" : "Cidade cadastrada com sucesso!", Color.Success);
             await LoadCidades();
             showNewCityModal = false;
         }
         catch (Exception ex)
         {
+            ShowAlert("Erro ao salvar cidade!", Color.Danger);
             Console.WriteLine($"Erro ao salvar cidade: {ex.Message}");
         }
     }
 
-    private void OnDeleteClicked(int id)
+    private async Task OnDeleteClicked(int id)
     {
-        // Lógica para deletar
-        Console.WriteLine($"Deletar cidade com ID: {id}");
+        try
+        {
+            // Encontrar a cidade pelo ID
+            var cidade = cidades.FirstOrDefault(c => c.Id == id);
+            if (cidade != null)
+            {
+                // Atualizar o status da cidade para inativo
+                cidade.Situacao = false;
+                var request = new HttpRequestMessage(HttpMethod.Put, $"https://localhost:7083/api/Cidade/cidades/{cidade.Id}");
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                request.Content = JsonContent.Create(cidade);
+
+                var response = await Http.SendAsync(request);
+                response.EnsureSuccessStatusCode();
+
+                await LoadCidades();
+                ShowAlert("Cidade inativada com sucesso!", Color.Success);
+            }
+            else
+            {
+                ShowAlert("Erro ao inativar cidade!", Color.Danger);
+                Console.WriteLine($"Cidade com ID: {id} não encontrada.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowAlert("Erro ao inativar cidade!", Color.Danger);
+            Console.WriteLine($"Erro ao marcar cidade como inativa: {ex.Message}");
+        }
+    }
+
+    private bool showAlert = false;
+    private string alertMessage = string.Empty;
+    private Color alertColor = Color.Primary;
+
+    private void ShowAlert(string message, Color color)
+    {
+        alertMessage = message;
+        alertColor = color;
+        showAlert = true;
     }
 
     public class Cidade
@@ -205,7 +276,7 @@
         public string? Nome { get; set; }
         public int FkEstado { get; set; }
         public Estado? Estado { get; set; }
-        public bool Situacao { get; set; } // Mapeado para bit no banco de dados
+        public bool Situacao { get; set; }
     }
 
     public class Estado

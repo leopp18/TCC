@@ -1,0 +1,70 @@
+﻿@page "/"
+@page "/login"
+@rendermode InteractiveServer
+
+@using System.Net.Http.Json
+
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject AuthService AuthService
+
+<Alert @bind-Visible="showAlert" Color="@alertColor">
+    @alertMessage
+    <CloseButton />
+</Alert>
+
+<div class="login-background">
+    <div class="login-card">
+        <h3>Login</h3>
+        <EditForm Model="usuario" OnValidSubmit="HandleLogin">
+            <DataAnnotationsValidator />
+            @* <ValidationSummary /> *@
+
+            <div class="form-group">
+                <label for="nome">Nome de Usuário</label>
+                <InputText id="username" class="form-control" @bind-Value="usuario.Nome" />
+            </div>
+
+            <div class="form-group">
+                <label for="senha">Senha</label>
+                <InputText id="password" type="password" class="form-control" @bind-Value="usuario.Senha" />
+            </div>
+
+            <button type="submit" class="btn btn-primary">Entrar</button>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    private Usuario usuario = new Usuario();
+
+    private async Task HandleLogin()
+    {
+        var success = await AuthService.Login(usuario.Nome, usuario.Senha);
+        if (success)
+        {
+            Navigation.NavigateTo("/home");
+        }
+        else
+        {
+            ShowAlert("Login inválido", Color.Danger);
+        }
+    }
+
+    private bool showAlert = false;
+    private string alertMessage = string.Empty;
+    private Color alertColor = Color.Primary;
+
+    private void ShowAlert(string message, Color color)
+    {
+        alertMessage = message;
+        alertColor = color;
+        showAlert = true;
+    }
+
+    public class Usuario
+    {
+        public string Nome { get; set; }
+        public string Senha { get; set; }
+    }
+}

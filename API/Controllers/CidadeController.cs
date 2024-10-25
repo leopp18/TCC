@@ -1,6 +1,7 @@
 ﻿
 using API_TCC.Data;
 using API_TCC.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,6 +9,7 @@ namespace API_TCC.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class CidadeController : ControllerBase
     {
 
@@ -32,8 +34,7 @@ namespace API_TCC.Controllers
 
         [HttpGet]
         [Route("cidades/{nome}")]
-
-        public async Task<IActionResult> getByIdAsync(//consulta por nome
+        public async Task<IActionResult> getByNomeAsync(//consulta por nome
             [FromServices] Contexto contexto,
             [FromRoute] string nome)
         {

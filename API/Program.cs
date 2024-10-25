@@ -1,6 +1,7 @@
 
 using API_TCC.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 
@@ -21,8 +22,17 @@ namespace API_TCC
             builder.Services.AddSwaggerGen();
             builder.Services.AddDbContext<Contexto>();
 
-            var tokenKey = "aqui minha chave privada";
+            var tokenKey = Environment.GetEnvironmentVariable("JWT_TOKEN_KEY");
             var key = Encoding.ASCII.GetBytes(tokenKey);
+
+            builder.Services.AddDbContext<Contexto>(options =>
+                options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+            builder.Services.AddScoped<IJWTAuthenticationManager, JWTAuthenticationManager>(provider =>
+            {
+                var context = provider.GetRequiredService<Contexto>();
+                return new JWTAuthenticationManager(tokenKey, context);
+            });
 
             builder.Services.AddAuthentication(
                      x =>
@@ -33,7 +43,7 @@ namespace API_TCC
                     ).AddJwtBearer(
                         x =>
                         {
-                            x.RequireHttpsMetadata = false;
+                            x.RequireHttpsMetadata = true; // Certifique-se de configurar corretamente para produção
                             x.SaveToken = true;
                             x.TokenValidationParameters = new TokenValidationParameters
                             {
@@ -45,13 +55,12 @@ namespace API_TCC
                         }
                     );
 
-            builder.Services.AddSingleton<IJWTAuthenticationManager>
-                (new JWTAuthenticationManager(tokenKey));
-
-
+            builder.Services.AddControllers();
+            builder.Services.AddEndpointsApiExplorer();
+            builder.Services.AddSwaggerGen();
             builder.Services.AddCors(options =>
             {
-                options.AddPolicy(name: myAllowSpecificOrigins,
+                options.AddPolicy(name: "_myAllowSpecificOrigins",
                     policy =>
                     {
                         policy.AllowAnyOrigin();
@@ -60,16 +69,8 @@ namespace API_TCC
                     });
             });
 
-            // add data protection services
-            var serviceCollection = new ServiceCollection();
-            serviceCollection.AddDataProtection();
-            var services = serviceCollection.BuildServiceProvider();
-
-
-
             var app = builder.Build();
 
-            // Configure the HTTP request pipeline.
             if (app.Environment.IsDevelopment())
             {
                 app.UseSwagger();
@@ -78,8 +79,8 @@ namespace API_TCC
 
             app.UseHttpsRedirection();
 
+            app.UseAuthentication();
             app.UseAuthorization();
-
 
             app.MapControllers();
 

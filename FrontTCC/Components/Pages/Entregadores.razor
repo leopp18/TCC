@@ -2,103 +2,149 @@
 @rendermode InteractiveServer
 
 @using Blazorise
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
 @inject HttpClient Http
+@inject IJSRuntime JS
+@inject AuthenticationStateProvider AuthenticationStateProvider
 
 <PageTitle>Entregadores</PageTitle>
 
 <h1>Entregadores</h1>
 
-<div class="d-flex justify-content-end mb-3">
-    <button class="btn btn-success" @onclick="ShowNewDeliveryPersonModal"><i class="bi bi-person-plus"></i></button>
-</div>
+<Alert @bind-Visible="showAlert" Color="@alertColor">
+    @alertMessage
+    <CloseButton />
+</Alert>
 
-<Table Striped Bordered>
-    <TableHeader ThemeContrast="ThemeContrast.Dark">
-        <TableRow>
-            <TableHeaderCell>#</TableHeaderCell>
-            <TableHeaderCell>Nome</TableHeaderCell>
-            <TableHeaderCell>Sobrenome</TableHeaderCell>
-            <TableHeaderCell>Pix</TableHeaderCell>
-            <TableHeaderCell>Status</TableHeaderCell>
-            <TableHeaderCell>Operações</TableHeaderCell> <!-- Nova coluna de operações -->
-        </TableRow>
-    </TableHeader>
-    <TableBody>
-        @if (entregadores != null)
-        {
-            @foreach (var entregador in entregadores)
+@if (permissao == "1")
+{
+    <div class="d-flex justify-content-end mb-3">
+        <button class="btn btn-success" @onclick="ShowNewDeliveryPersonModal"><i class="bi bi-person-plus"></i></button>
+    </div>
+
+    <Table Striped Bordered>
+        <TableHeader ThemeContrast="ThemeContrast.Dark">
+            <TableRow>
+                <TableHeaderCell>#</TableHeaderCell>
+                <TableHeaderCell>Nome</TableHeaderCell>
+                <TableHeaderCell>Sobrenome</TableHeaderCell>
+                <TableHeaderCell>Pix</TableHeaderCell>
+                <TableHeaderCell>Celular</TableHeaderCell> 
+                <TableHeaderCell>Status</TableHeaderCell>
+                <TableHeaderCell>Operações</TableHeaderCell> 
+            </TableRow>
+        </TableHeader>
+        <TableBody>
+            @if (entregadores != null)
             {
-                <TableRow>
-                    <TableRowHeader>@entregador.Id</TableRowHeader>
-                    <TableRowCell>@entregador.Nome</TableRowCell>
-                    <TableRowCell>@entregador.Sobrenome</TableRowCell>
-                    <TableRowCell>@entregador.Pix</TableRowCell>
-                    <TableRowCell>@(entregador.Situacao ? "Ativo" : "Inativo")</TableRowCell>
-                    <TableRowCell>
-                        <button class="btn btn-primary btn-sm" @onclick="() => ShowEditDeliveryPersonModal(entregador)"><i class="bi bi-pencil"></i></button>
-                        <button class="btn btn-danger btn-sm" @onclick="() => OnDeleteClicked(entregador.Id)"><i class="bi bi-trash"></i></button>
-                    </TableRowCell>
-                </TableRow>
+                int rowIndex = 1;
+                @foreach (var entregador in entregadores)
+                {
+                    <tr>
+                        <td><strong>@rowIndex</strong></td>
+                        <td>@entregador.Nome</td>
+                        <td>@entregador.Sobrenome</td>
+                        <td>@entregador.Pix</td>
+                        <td>@FormatPhoneNumberForDisplay(entregador.Celular)</td> 
+                        <td>@(entregador.Situacao ? "Ativo" : "Inativo")</td>
+                        <td>
+                            <button class="btn btn-primary btn-sm" @onclick="() => ShowEditDeliveryPersonModal(entregador)"><i class="bi bi-pencil"></i></button>
+                            <button class="btn btn-danger btn-sm" @onclick="() => OnDeleteClicked(entregador.Id)"><i class="bi bi-trash"></i></button>
+                        </td>
+                    </tr>
+                    rowIndex++;
+                }
             }
-        }
-    </TableBody>
-</Table>
+        </TableBody>
+    </Table>
 
-<Modal @bind-Visible="showNewDeliveryPersonModal">
-    <ModalBackdrop />
-    <ModalContent>
-        <ModalHeader>
-            <ModalTitle>@(isEditMode ? "Editar Entregador" : "Novo Entregador")</ModalTitle>
-            <Button CloseButton @onclick="HideNewDeliveryPersonModal" />
-        </ModalHeader>
-        <ModalBody>
-            <div class="form-group">
-                <label for="nome">Nome</label>
-                <input type="text" class="form-control" id="nome" @bind="newEntregador.Nome" />
-            </div>
-            <div class="form-group">
-                <label for="sobrenome">Sobrenome</label>
-                <input type="text" class="form-control" id="sobrenome" @bind="newEntregador.Sobrenome" />
-            </div>
-            <div class="form-group">
-                <label for="pix">Pix</label>
-                <input type="text" class="form-control" id="pix" @bind="newEntregador.Pix" />
-            </div>
-            <div class="form-group">
-                <label for="status">Status</label>
-                <Select @bind-SelectedValue="@newEntregador.Situacao">
-                    <SelectItem Value="true">Ativo</SelectItem>
-                    <SelectItem Value="false">Inativo</SelectItem>
-                </Select>
-            </div>
-        </ModalBody>
-        <ModalFooter>
-            <Button Color="Color.Primary" @onclick="SaveNewDeliveryPerson">Salvar</Button>
-            <Button Color="Color.Secondary" @onclick="HideNewDeliveryPersonModal">Cancelar</Button>
-        </ModalFooter>
-    </ModalContent>
-</Modal>
+    <Modal @bind-Visible="showNewDeliveryPersonModal">
+        <ModalBackdrop />
+        <ModalContent>
+            <ModalHeader>
+                <ModalTitle>@(isEditMode ? "Editar Entregador" : "Novo Entregador")</ModalTitle>
+                <Button CloseButton @onclick="HideNewDeliveryPersonModal" />
+            </ModalHeader>
+            <ModalBody>
+                <div class="form-group">
+                    <label for="nome">Nome</label>
+                    <input type="text" class="form-control" id="nome" @bind="newEntregador.Nome" />
+                </div>
+                <div class="form-group">
+                    <label for="sobrenome">Sobrenome</label>
+                    <input type="text" class="form-control" id="sobrenome" @bind="newEntregador.Sobrenome" />
+                </div>
+                <div class="form-group">
+                    <label for="pix">Pix</label>
+                    <input type="text" class="form-control" id="pix" @bind="newEntregador.Pix" />
+                </div>
+                <div class="form-group">
+                    <label for="celular">Celular</label>
+                    <input type="text" class="form-control" id="celular" @bind="newEntregador.Celular"  />
+                </div>
+                <div class="form-group">
+                    <label for="status">Status</label>
+                    <Select @bind-SelectedValue="@newEntregador.Situacao">
+                        <SelectItem Value="true">Ativo</SelectItem>
+                        <SelectItem Value="false">Inativo</SelectItem>
+                    </Select>
+                </div>
+            </ModalBody>
+            <ModalFooter>
+                <Button Color="Color.Primary" @onclick="SaveNewDeliveryPerson">Salvar</Button>
+                <Button Color="Color.Secondary" @onclick="HideNewDeliveryPersonModal">Cancelar</Button>
+            </ModalFooter>
+        </ModalContent>
+    </Modal>
+}
+else
+{
+    <p>Você não tem permissão para acessar esta página.</p>
+}
 
 @code {
     private bool showNewDeliveryPersonModal = false;
     private bool isEditMode = false;
     private List<Entregador> entregadores = new List<Entregador>();
     private Entregador newEntregador = new Entregador();
+    private string token = string.Empty;
+    private string permissao = string.Empty;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        await LoadEntregadores();
+        if (firstRender)
+        {
+            token = await JS.InvokeAsync<string>("localStorage.getItem", "authToken");
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            // Obtenha a permissão do usuário a partir das claims
+            permissao = user.FindFirst(c => c.Type == "permissao")?.Value;
+
+            if (permissao == "1")
+            {
+                await LoadEntregadores();
+            }
+
+            StateHasChanged(); // Força a atualização do componente após a inicialização
+        }
     }
 
     private async Task LoadEntregadores()
     {
         try
         {
-            entregadores = await Http.GetFromJsonAsync<List<Entregador>>("https://localhost:7083/api/Entregador/entregadores") ?? new List<Entregador>();
+            var request = new HttpRequestMessage(HttpMethod.Get, "https://localhost:7083/api/Entregador/entregadores");
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            var response = await Http.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+            entregadores = await response.Content.ReadFromJsonAsync<List<Entregador>>() ?? new List<Entregador>();
+            entregadores = entregadores.OrderBy(e => e.Nome).ToList();
         }
         catch (Exception ex)
         {
-            // Adicionar um tratamento de erro adequado aqui
+            ShowAlert("Erro ao carregar entregadores", Color.Danger);
             Console.WriteLine($"Erro ao carregar entregadores: {ex.Message}");
         }
     }
@@ -119,6 +165,7 @@
             Nome = entregador.Nome,
             Sobrenome = entregador.Sobrenome,
             Pix = entregador.Pix,
+            Celular = FormatPhoneNumberForDisplay(entregador.Celular),
             Situacao = entregador.Situacao
         };
         isEditMode = true;
@@ -136,28 +183,85 @@
     {
         try
         {
-            if (isEditMode)
-            {
-                await Http.PutAsJsonAsync($"https://localhost:7083/api/Entregador/entregadores{newEntregador.Id}", newEntregador);
-            }
-            else
-            {
-                await Http.PostAsJsonAsync("https://localhost:7083/api/Entregador/entregadores", newEntregador);
-            }
+            // Remover a máscara do número de celular
+            newEntregador.Celular = newEntregador.Celular != null ? new string(newEntregador.Celular.Where(char.IsDigit).ToArray()) : string.Empty;
+
+            var request = new HttpRequestMessage(isEditMode ? HttpMethod.Put : HttpMethod.Post, 
+                isEditMode ? $"https://localhost:7083/api/Entregador/entregadores/{newEntregador.Id}" : "https://localhost:7083/api/Entregador/entregadores");
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            request.Content = JsonContent.Create(newEntregador);
+
+            var response = await Http.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+
+            ShowAlert(isEditMode ? "Entregador alterado com sucesso!" : "Entregador cadastrado com sucesso!", Color.Success);
             await LoadEntregadores();
             showNewDeliveryPersonModal = false;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            // Adicionar um tratamento de erro adequado aqui
-            Console.WriteLine($"Erro ao salvar entregador: {ex.Message}");
+            ShowAlert($"Erro ao salvar entregador", Color.Danger);
         }
     }
 
-    private void OnDeleteClicked(int id)
+    private async Task OnDeleteClicked(int id)
     {
-        // Lógica para deletar
-        Console.WriteLine($"Deletar entregador com ID: {id}");
+        try
+        {
+            var entregador = entregadores.FirstOrDefault(e => e.Id == id);
+            if (entregador != null)
+            {
+                entregador.Situacao = false;
+                var request = new HttpRequestMessage(HttpMethod.Put, $"https://localhost:7083/api/Entregador/entregadores/{entregador.Id}");
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                request.Content = JsonContent.Create(entregador);
+
+                var response = await Http.SendAsync(request);
+                response.EnsureSuccessStatusCode();
+
+                await LoadEntregadores();
+                ShowAlert("Entregador inativado com sucesso!", Color.Success);
+            }
+            else
+            {
+                ShowAlert("Erro ao inativar entregador!", Color.Danger);
+            }
+        }
+        catch (Exception)
+        {
+            ShowAlert("Erro ao inativar entregador!", Color.Danger);
+        }
+    }
+
+    private string FormatPhoneNumberForDisplay(string? phoneNumber)
+    {
+        if (string.IsNullOrEmpty(phoneNumber))
+        {
+            return string.Empty;
+        }
+
+        var input = new string(phoneNumber.Where(char.IsDigit).ToArray());
+
+        if (input.Length > 11)
+            input = input.Substring(0, 11);
+
+        if (input.Length > 7)
+            return $"{input.Substring(0, 2)} {input.Substring(2, 5)}-{input.Substring(7)}";
+        else if (input.Length > 2)
+            return $"{input.Substring(0, 2)} {input.Substring(2)}";
+
+        return input;
+    }
+
+    private bool showAlert = false;
+    private string alertMessage = string.Empty;
+    private Color alertColor = Color.Primary;
+
+    private void ShowAlert(string message, Color color)
+    {
+        alertMessage = message;
+        alertColor = color;
+        showAlert = true;
     }
 
     public class Entregador
@@ -166,6 +270,7 @@
         public string? Nome { get; set; }
         public string? Sobrenome { get; set; }
         public string? Pix { get; set; }
-        public bool Situacao { get; set; } // Mapeado para bit no banco de dados
+        public string? Celular { get; set; }
+        public bool Situacao { get; set; }
     }
 }

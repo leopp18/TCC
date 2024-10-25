@@ -1,4 +1,9 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
+﻿@inject AuthService AuthService
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
         <a class="navbar-brand" href="">SGP Modolog</a>
     </div>
@@ -9,23 +14,23 @@
 <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
     <nav class="flex-column">
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+            <NavLink class="nav-link" href="home" Match="NavLinkMatch.All">
                 <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
             </NavLink>
         </div>
-
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="fechamento-sede">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Fechamento sede
-            </NavLink>
-        </div>
-
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="fechamento-interior">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Fechamento interior
-            </NavLink>
-        </div>
-
+        @if (permissao == "1")
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="fechamento-sede">
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Fechamento sede
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="fechamento-interior">
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Fechamento interior
+                </NavLink>
+            </div>
+        }
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="quantidades-sede">
                 <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Quantidades sede
@@ -37,36 +42,68 @@
                 <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Quantidades interior
             </NavLink>
         </div>
+        @if (permissao == "1")
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="entregadores">
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Entregadores
+                </NavLink>
+            </div>
 
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="entregadores">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Entregadores
-            </NavLink>
-        </div>
-        
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="precos">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Preços
-            </NavLink>
-        </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="precos">
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Preços
+                </NavLink>
+            </div>
 
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="cidades">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Cidades
-            </NavLink>
-        </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="cidades">
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Cidades
+                </NavLink>
+            </div>
 
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="estados">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Estados
-            </NavLink>
-        </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="estados">
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Estados
+                </NavLink>
+            </div>
 
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="tipos-de-entrega">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Tipos de entrega
-            </NavLink>
-        </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="tipos-de-entrega">
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Tipos de entrega
+                </NavLink>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="usuarios">
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Usuários
+                </NavLink>
+            </div>
+        }
     </nav>
+
+    <div class="nav-item px-3" style="position: absolute; bottom: 0;">
+        <button class="btn btn-outline-light" @onclick="Logout">Logout</button>
+    </div>
+
 </div>
 
+@code {
+    string permissao = string.Empty;
+
+    private async Task Logout()
+    {
+        await AuthService.Logout();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            permissao = user.FindFirst(c => c.Type == "permissao")?.Value;
+            StateHasChanged(); // Atualiza o componente após capturar a permissão
+        }
+    }
+}

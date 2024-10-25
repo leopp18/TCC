@@ -1,5 +1,6 @@
 ﻿using API_TCC.Data;
 using API_TCC.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,6 +9,7 @@ namespace API_TCC.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class PagEntController : ControllerBase
     {
         private readonly IJWTAuthenticationManager jwtAuthenticationManager;
@@ -30,17 +32,33 @@ namespace API_TCC.Controllers
         }
 
         [HttpGet]
-        [Route("pagamentoentrega/{id}")]
-        public async Task<IActionResult> getByIdAsync(//consulta por id
+        [Route("pagamentoentrega/{periodo}")]
+        public async Task<IActionResult> getByPeriodoAsync(//consulta por periodo
             [FromServices] Contexto contexto,
-            [FromRoute] int id)
+            [FromRoute] DateOnly periodo)
         {
             var pagamentoEntrega = await contexto
                 .PagamentoEntregas
                 .AsNoTracking()
-                .FirstOrDefaultAsync(e => e.Id == id);
+                .Where(e => e.Periodo == periodo)
+                .ToListAsync();
 
             return pagamentoEntrega == null ? NotFound() : Ok(pagamentoEntrega);
+        }
+
+        [HttpGet]
+        [Route("pagamentoentrega/pagamento/{fkPagamento}")]
+        public async Task<IActionResult> getByFkPagamentoAsync(//consulta por fkPagamento
+        [FromServices] Contexto contexto,
+        [FromRoute] int fkPagamento)
+        {
+            var pagamentoEntregas = await contexto
+                .PagamentoEntregas
+                .AsNoTracking()
+                .Where(e => e.FkPagamento == fkPagamento)
+                .ToListAsync();
+
+            return pagamentoEntregas == null || !pagamentoEntregas.Any() ? NotFound() : Ok(pagamentoEntregas);
         }
 
         [HttpPost]
@@ -86,6 +104,7 @@ namespace API_TCC.Controllers
                 e.FkEntrega = pagamentoEntrega.FkEntrega;
                 e.FkPagamento = pagamentoEntrega.FkPagamento;
                 e.Quantidade = pagamentoEntrega.Quantidade;
+                e.Periodo = pagamentoEntrega.Periodo;
 
                 contexto.PagamentoEntregas.Update(e);
                 await contexto.SaveChangesAsync();

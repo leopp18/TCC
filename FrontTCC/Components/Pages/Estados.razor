@@ -2,88 +2,124 @@
 @rendermode InteractiveServer
 
 @using Blazorise
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
 @inject HttpClient Http
+@inject IJSRuntime JS
+@inject AuthenticationStateProvider AuthenticationStateProvider
 
 <PageTitle>Estados</PageTitle>
 
 <h1>Estados</h1>
 
-<div class="d-flex justify-content-end mb-3">
-    <button class="btn btn-success" @onclick="ShowNewStateModal"><i class="bi bi-plus-circle"></i></button>
-</div>
+<Alert @bind-Visible="showAlert" Color="@alertColor">
+    @alertMessage
+    <CloseButton />
+</Alert>
 
-<Table Striped Bordered>
-    <TableHeader ThemeContrast="ThemeContrast.Dark">
-        <TableRow>
-            <TableHeaderCell>#</TableHeaderCell>
-            <TableHeaderCell>Nome</TableHeaderCell>
-            <TableHeaderCell>Sigla</TableHeaderCell>
-            <TableHeaderCell>Operações</TableHeaderCell>
-        </TableRow>
-    </TableHeader>
-    <TableBody>
-        @if (estados != null)
-        {
-            @foreach (var estado in estados)
+@if (permissao == "1")
+{
+    <div class="d-flex justify-content-end mb-3">
+        <button class="btn btn-success" @onclick="ShowNewStateModal"><i class="bi bi-plus-circle"></i></button>
+    </div>
+
+    <Table Striped Bordered>
+        <TableHeader ThemeContrast="ThemeContrast.Dark">
+            <TableRow>
+                <TableHeaderCell>#</TableHeaderCell>
+                <TableHeaderCell>Nome</TableHeaderCell>
+                <TableHeaderCell>Sigla</TableHeaderCell>
+                <TableHeaderCell>Operações</TableHeaderCell>
+            </TableRow>
+        </TableHeader>
+        <TableBody>
+            @if (estados != null)
             {
-                <TableRow>
-                    <TableRowHeader>@estado.Id</TableRowHeader>
-                    <TableRowCell>@estado.Nome</TableRowCell>
-                    <TableRowCell>@estado.Sigla</TableRowCell>
-                    <TableRowCell>
-                        <button class="btn btn-primary btn-sm" @onclick="() => ShowEditStateModal(estado)"><i class="bi bi-pencil"></i></button>
-                        <button class="btn btn-danger btn-sm" @onclick="() => OnDeleteClicked(estado.Id)"><i class="bi bi-trash"></i></button>
-                    </TableRowCell>
-                </TableRow>
+                @foreach (var estado in estados)
+                {
+                    <TableRow>
+                        <TableRowHeader>@estado.Id</TableRowHeader>
+                        <TableRowCell>@estado.Nome</TableRowCell>
+                        <TableRowCell>@estado.Sigla</TableRowCell>
+                        <TableRowCell>
+                            <button class="btn btn-primary btn-sm" @onclick="() => ShowEditStateModal(estado)"><i class="bi bi-pencil"></i></button>
+                        </TableRowCell>
+                    </TableRow>
+                }
             }
-        }
-    </TableBody>
-</Table>
+        </TableBody>
+    </Table>
 
-<Modal @bind-Visible="showNewStateModal">
-    <ModalBackdrop />
-    <ModalContent>
-        <ModalHeader>
-            <ModalTitle>@(isEditMode ? "Editar Estado" : "Novo Estado")</ModalTitle>
-            <Button CloseButton @onclick="HideNewStateModal" />
-        </ModalHeader>
-        <ModalBody>
-            <div class="form-group">
-                <label for="nome">Nome</label>
-                <input type="text" class="form-control" id="nome" @bind="newState.Nome" />
-            </div>
-            <div class="form-group">
-                <label for="sigla">Sigla</label>
-                <input type="text" class="form-control" id="sigla" @bind="newState.Sigla" />
-            </div>
-        </ModalBody>
-        <ModalFooter>
-            <Button Color="Color.Primary" @onclick="SaveNewState">Salvar</Button>
-            <Button Color="Color.Secondary" @onclick="HideNewStateModal">Cancelar</Button>
-        </ModalFooter>
-    </ModalContent>
-</Modal>
+    <Modal @bind-Visible="showNewStateModal">
+        <ModalBackdrop />
+        <ModalContent>
+            <ModalHeader>
+                <ModalTitle>@(isEditMode ? "Editar Estado" : "Novo Estado")</ModalTitle>
+                <Button CloseButton @onclick="HideNewStateModal" />
+            </ModalHeader>
+            <ModalBody>
+                <div class="form-group">
+                    <label for="nome">Nome</label>
+                    <input type="text" class="form-control" id="nome" @bind="newState.Nome" />
+                </div>
+                <div class="form-group">
+                    <label for="sigla">Sigla</label>
+                    <input type="text" class="form-control" id="sigla" @bind="newState.Sigla" />
+                </div>
+            </ModalBody>
+            <ModalFooter>
+                <Button Color="Color.Primary" @onclick="SaveNewState">Salvar</Button>
+                <Button Color="Color.Secondary" @onclick="HideNewStateModal">Cancelar</Button>
+            </ModalFooter>
+        </ModalContent>
+    </Modal>
+}
+else
+{
+    <p>Você não tem permissão para acessar esta página.</p>
+}
 
 @code {
     private bool showNewStateModal = false;
     private bool isEditMode = false;
     private List<Estado> estados = new List<Estado>();
     private Estado newState = new Estado();
+    private string token = string.Empty;
+    private string permissao = string.Empty;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        await LoadEstados();
+        if (firstRender)
+        {
+            token = await JS.InvokeAsync<string>("localStorage.getItem", "authToken");
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            // Obtenha a permissão do usuário a partir das claims
+            permissao = user.FindFirst(c => c.Type == "permissao")?.Value;
+
+            if (permissao == "1")
+            {
+                await LoadEstados();
+            }
+
+            StateHasChanged(); 
+        }
     }
 
     private async Task LoadEstados()
     {
         try
         {
-            estados = await Http.GetFromJsonAsync<List<Estado>>("https://localhost:7083/api/Estado/estados") ?? new List<Estado>();
+            var request = new HttpRequestMessage(HttpMethod.Get, "https://localhost:7083/api/Estado/estados");
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            var response = await Http.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+            estados = await response.Content.ReadFromJsonAsync<List<Estado>>() ?? new List<Estado>();
         }
         catch (Exception ex)
         {
-            // Adicionar um tratamento de erro adequado aqui
+            ShowAlert("Erro ao carregar estados", Color.Danger);
             Console.WriteLine($"Erro ao carregar estados: {ex.Message}");
         }
     }
@@ -116,28 +152,34 @@
     {
         try
         {
-            if (isEditMode)
-            {
-                await Http.PutAsJsonAsync($"https://localhost:7083/api/Estado/estados/{newState.Id}", newState);
-            }
-            else
-            {
-                await Http.PostAsJsonAsync("https://localhost:7083/api/Estado/estados", newState);
-            }
+            var request = new HttpRequestMessage(isEditMode ? HttpMethod.Put : HttpMethod.Post, 
+                isEditMode ? $"https://localhost:7083/api/Estado/estados/{newState.Id}" : "https://localhost:7083/api/Estado/estados");
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            request.Content = JsonContent.Create(newState);
+
+            var response = await Http.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+
+            ShowAlert(isEditMode ? "Estado alterado com sucesso!" : "Estado cadastrado com sucesso!", Color.Success);
             await LoadEstados();
             showNewStateModal = false;
         }
         catch (Exception ex)
         {
-            // Adicionar um tratamento de erro adequado aqui
+            ShowAlert("Erro ao salvar estado!", Color.Danger);
             Console.WriteLine($"Erro ao salvar estado: {ex.Message}");
         }
     }
 
-    private void OnDeleteClicked(int id)
+    private bool showAlert = false;
+    private string alertMessage = string.Empty;
+    private Color alertColor = Color.Primary;
+
+    private void ShowAlert(string message, Color color)
     {
-        // Lógica para deletar
-        Console.WriteLine($"Deletar estado com ID: {id}");
+        alertMessage = message;
+        alertColor = color;
+        showAlert = true;
     }
 
     public class Estado

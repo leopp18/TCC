@@ -1,4 +1,4 @@
-﻿@page "/fechamento-sede"
+﻿@page "/fechamento-interior"
 @using System.Net
 @using Microsoft.AspNetCore.Components.Authorization
 @rendermode InteractiveServer
@@ -7,9 +7,9 @@
 @inject IJSRuntime JS
 @inject HttpClient Http
 
-<PageTitle>Fechamento Sede</PageTitle>
+<PageTitle>Fechamento Interior</PageTitle>
 
-<h1>Fechamento Sede</h1>
+<h1>Fechamento Interior</h1>
 
 <Alert @bind-Visible="showAlert" Color="@alertColor">
     @alertMessage
@@ -20,15 +20,6 @@
 {
     <EditForm Model="filtroPagamento" OnValidSubmit="BuscarPagamentos">
         <div class="form-row d-flex justify-content-between">
-            <div class="form-group col-md-3 d-flex align-items-center">
-                <label class="mr-2"><strong>Quinzena:</strong></label>
-                <div>
-                    <RadioGroup TValue="int" @bind-CheckedValue="filtroPagamento.Quinzena">
-                        <Radio Value="@(1)">1ª quinzena</Radio>
-                        <Radio Value="@(2)">2ª quinzena</Radio>
-                    </RadioGroup>
-                </div>
-            </div>
             <div class="form-group col-md-3 d-flex align-items-center">
                 <label class="mr-2"><strong>Mês:</strong></label>
                 <InputSelect @bind-Value="filtroPagamento.Mes">
@@ -65,6 +56,7 @@
         <TableHeader ThemeContrast="ThemeContrast.Dark">
             <TableRow>
                 <TableHeaderCell class="id-coluna">#</TableHeaderCell>
+                <TableHeaderCell class="cidade-coluna">Cidade</TableHeaderCell>
                 <TableHeaderCell class="nome-coluna">Nome</TableHeaderCell>
                 <TableHeaderCell class="nome-coluna">Chave Pix</TableHeaderCell>
                 <TableHeaderCell class="soma-coluna">Valor Bruto</TableHeaderCell>
@@ -75,7 +67,7 @@
                 <TableHeaderCell class="id-coluna">Envio</TableHeaderCell>
                 <TableHeaderCell class="id-coluna">Nota Fiscal</TableHeaderCell>
                 <TableHeaderCell class="id-coluna">Operação</TableHeaderCell>
-                <TableHeaderCell class="id-coluna">Pago</TableHeaderCell> 
+                <TableHeaderCell class="id-coluna">Pago</TableHeaderCell>
             </TableRow>
         </TableHeader>
         <TableBody>
@@ -92,6 +84,7 @@
 
                     <tr class="@GetRowClass(pagamento.Pago)">
                         <td class="id-coluna"><strong>@rowIndex</strong></td>
+                        <td class="nome-coluna">@pagamento.CidadeNome</td>
                         <td class="nome-coluna">@entregador.Nome @entregador.Sobrenome</td>
                         <td class="nome-coluna">@entregador.Pix</td>
                         <td class="soma-coluna">@valorBruto.ToString("C")</td>
@@ -99,7 +92,7 @@
                             <NumericEdit Plaintext @bind-Value="pagamento.Desconto" @onchange="() => UpdateValorLiquido(pagamento, entregador)" />
                         </td>
                         <td class="soma-coluna">
-                            <NumericEdit Plaintext @bind-Value="pagamento.Adiantamento" @onchange="() => UpdateValorLiquido(pagamento, entregador)"  />
+                            <NumericEdit Plaintext @bind-Value="pagamento.Adiantamento" @onchange="() => UpdateValorLiquido(pagamento, entregador)" />
                         </td>
                         <td class="soma-coluna">
                             <NumericEdit Plaintext @bind-Value="pagamento.Adicional" @onchange="() => UpdateValorLiquido(pagamento, entregador)" />
@@ -123,7 +116,7 @@
                     rowIndex++;
                 }
                 <tr>
-                    <td colspan="3"><strong>Total</strong></td>
+                    <td colspan="4"><strong>Total</strong></td>
                     <td class="soma-coluna"><strong>@pagamentos.Sum(p => CalcularValorBruto(p.FkEntregador, p.Periodo)).ToString("C")</strong></td>
                     <td class="soma-coluna"><strong>@pagamentos.Sum(p => p.Desconto.GetValueOrDefault()).ToString("C")</strong></td>
                     <td class="soma-coluna"><strong>@pagamentos.Sum(p => p.Adiantamento.GetValueOrDefault()).ToString("C")</strong></td>
@@ -140,14 +133,13 @@ else
     <p>Você não tem permissão para acessar esta página.</p>
 }
 
-
 @code {
-    private List<Entregador> entregadores;
-    private List<Pagamento> pagamentos;
+    private List<Entregador> entregadores = new List<Entregador>();
+    private List<Pagamento> pagamentos = new List<Pagamento>();
+    private List<Cidade> cidades = new List<Cidade>();
+    private FiltroPagamento filtroPagamento = new FiltroPagamento();
     private string token = string.Empty;
     private string permissao = string.Empty;
-
-    private FiltroPagamento filtroPagamento = new FiltroPagamento();
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -164,6 +156,7 @@ else
             {
                 await LoadEntregadores();
                 await LoadPagamentos();
+                await LoadCidades();
             }
 
             StateHasChanged(); // Força a atualização do componente após a inicialização
@@ -174,18 +167,14 @@ else
     {
         try
         {
-            var requestMessage = new HttpRequestMessage(HttpMethod.Get, "https://localhost:7083/api/Entregador/entregadores");
-            requestMessage.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-            var response = await Http.SendAsync(requestMessage);
-
-            if (response.IsSuccessStatusCode)
-            {
-                entregadores = await response.Content.ReadFromJsonAsync<List<Entregador>>() ?? new List<Entregador>();
-            }
+            var request = new HttpRequestMessage(HttpMethod.Get, "https://localhost:7083/api/Entregador/entregadores");
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            var response = await Http.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+            entregadores = await response.Content.ReadFromJsonAsync<List<Entregador>>() ?? new List<Entregador>();
         }
         catch (Exception ex)
         {
-            // Adicionar um tratamento de erro adequado aqui
             Console.WriteLine($"Erro ao carregar entregadores: {ex.Message}");
         }
     }
@@ -194,45 +183,31 @@ else
     {
         try
         {
-            // Calcular a data correta com base na quinzena, mês e ano selecionados
-            DateTime data;
-            if (filtroPagamento.Quinzena == 1)
-            {
-                data = new DateTime(filtroPagamento.Ano, filtroPagamento.Mes, 1);
-            }
-            else
-            {
-                data = new DateTime(filtroPagamento.Ano, filtroPagamento.Mes, 16);
-            }
+            DateTime data = new DateTime(filtroPagamento.Ano, filtroPagamento.Mes, 10);
+            var request = new HttpRequestMessage(HttpMethod.Get, $"https://localhost:7083/api/Pagamento/pagamentos/{data:yyyy-MM-dd}");
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            var response = await Http.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+            pagamentos = await response.Content.ReadFromJsonAsync<List<Pagamento>>() ?? new List<Pagamento>();
 
-            // Fazer a requisição para a API com o parâmetro de data
-            var requestMessage = new HttpRequestMessage(HttpMethod.Get, $"https://localhost:7083/api/Pagamento/pagamentos/{data.ToString("yyyy-MM-dd")}");
-            requestMessage.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-            var response = await Http.SendAsync(requestMessage);
-
-            if (response.IsSuccessStatusCode)
+            foreach (var pagamento in pagamentos)
             {
-                pagamentos = await response.Content.ReadFromJsonAsync<List<Pagamento>>() ?? new List<Pagamento>();
-
-                foreach (var pagamento in pagamentos)
+                if (pagamento.Adiantamento.HasValue)
                 {
-                    if (pagamento.Adiantamento.HasValue)
-                    {
-                        pagamento.Adiantamento = decimal.Round(pagamento.Adiantamento.Value, 2);
-                    }
-                    if (pagamento.Adicional.HasValue)
-                    {
-                        pagamento.Adicional = decimal.Round(pagamento.Adicional.Value, 2);
-                    }
-                    if (pagamento.Desconto.HasValue)
-                    {
-                        pagamento.Desconto = decimal.Round(pagamento.Desconto.Value, 2);
-                    }
-                    var entregador = entregadores.FirstOrDefault(e => e.Id == pagamento.FkEntregador);
-                    if (entregador != null)
-                    {
-                        UpdateValorLiquido(pagamento, entregador);
-                    }
+                    pagamento.Adiantamento = decimal.Round(pagamento.Adiantamento.Value, 2);
+                }
+                if (pagamento.Adicional.HasValue)
+                {
+                    pagamento.Adicional = decimal.Round(pagamento.Adicional.Value, 2);
+                }
+                if (pagamento.Desconto.HasValue)
+                {
+                    pagamento.Desconto = decimal.Round(pagamento.Desconto.Value, 2);
+                }
+                var entregador = entregadores.FirstOrDefault(e => e.Id == pagamento.FkEntregador);
+                if (entregador != null)
+                {
+                    UpdateValorLiquido(pagamento, entregador);
                 }
             }
         }
@@ -243,9 +218,34 @@ else
         }
     }
 
+    private async Task LoadCidades()
+    {
+        try
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, "https://localhost:7083/api/Cidade/cidades");
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            var response = await Http.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+            cidades = await response.Content.ReadFromJsonAsync<List<Cidade>>() ?? new List<Cidade>();
+            cidades = cidades.Where(e => e.Situacao).ToList();
+
+            foreach (var pagamento in pagamentos)
+            {
+                var cidade = cidades.FirstOrDefault(c => c.Id == pagamento.FkCidade);
+                pagamento.CidadeNome = cidade?.Nome ?? string.Empty;
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowAlert("Erro ao carregar cidades", Color.Danger);
+            Console.WriteLine($"Erro ao carregar cidades: {ex.Message}");
+        }
+    }
+
     private async Task BuscarPagamentos()
     {
         await LoadPagamentos();
+        await LoadCidades();
     }
 
     private async Task EnviarMensagemWhatsApp(Entregador entregador)
@@ -295,19 +295,19 @@ else
     private void OnPagoChanged(Pagamento pagamento, bool value)
     {
         pagamento.Pago = value;
-        var requestMessage = new HttpRequestMessage(HttpMethod.Put, $"https://localhost:7083/api/Pagamento/pagamentos/{pagamento.Id}");
-        requestMessage.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-        requestMessage.Content = JsonContent.Create(pagamento);
-        Http.SendAsync(requestMessage);
+        var request = new HttpRequestMessage(HttpMethod.Put, $"https://localhost:7083/api/Pagamento/pagamentos/{pagamento.Id}");
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        request.Content = JsonContent.Create(pagamento);
+        Http.SendAsync(request);
     }
 
     private void OnNotaFiscalChanged(Pagamento pagamento, bool value)
     {
         pagamento.NotaFiscal = value;
-        var requestMessage = new HttpRequestMessage(HttpMethod.Put, $"https://localhost:7083/api/Pagamento/pagamentos/{pagamento.Id}");
-        requestMessage.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-        requestMessage.Content = JsonContent.Create(pagamento);
-        Http.SendAsync(requestMessage);
+        var request = new HttpRequestMessage(HttpMethod.Put, $"https://localhost:7083/api/Pagamento/pagamentos/{pagamento.Id}");
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        request.Content = JsonContent.Create(pagamento);
+        Http.SendAsync(request);
     }
 
     private string GetRowClass(bool pago)
@@ -319,30 +319,27 @@ else
     {
         decimal valorBruto = CalcularValorBruto(entregador.Id, pagamento.Periodo);
         pagamento.ValorLiquido = valorBruto - pagamento.Desconto.GetValueOrDefault() - pagamento.Adiantamento.GetValueOrDefault() + pagamento.Adicional.GetValueOrDefault();
-        var requestMessage = new HttpRequestMessage(HttpMethod.Put, $"https://localhost:7083/api/Pagamento/pagamentos/{pagamento.Id}");
-        requestMessage.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-        requestMessage.Content = JsonContent.Create(pagamento);
-        Http.SendAsync(requestMessage);
+        var request = new HttpRequestMessage(HttpMethod.Put, $"https://localhost:7083/api/Pagamento/pagamentos/{pagamento.Id}");
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        request.Content = JsonContent.Create(pagamento);
+        Http.SendAsync(request);
     }
 
     private decimal CalcularValorBruto(int entregadorId, DateOnly periodo)
     {
         decimal valorBruto = 0;
 
-        // Obter os pagamentos do entregador para o período especificado
-        var requestPagamentos = new HttpRequestMessage(HttpMethod.Get, $"https://localhost:7083/api/Pagamento/pagamentos/{periodo.ToString("yyyy-MM-dd")}/{entregadorId}");
+        var requestPagamentos = new HttpRequestMessage(HttpMethod.Get, $"https://localhost:7083/api/Pagamento/pagamentos/{periodo:yyyy-MM-dd}/{entregadorId}");
         requestPagamentos.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
         var responsePagamentos = Http.SendAsync(requestPagamentos).Result;
 
         if (responsePagamentos.StatusCode == HttpStatusCode.NotFound)
         {
-            // throw new Exception("Pagamentos não encontrados para o entregador e período especificados.");
             return valorBruto;
         }
 
         var pagamentos = responsePagamentos.Content.ReadFromJsonAsync<List<Pagamento>>().Result;
 
-        // Verificar se pagamentos é nulo
         if (pagamentos == null)
         {
             return valorBruto;
@@ -350,14 +347,12 @@ else
 
         foreach (var pagamento in pagamentos)
         {
-            // Obter as quantidades da tabela PagamentoEntrega para cada pagamento
             var requestPagamentoEntregas = new HttpRequestMessage(HttpMethod.Get, $"https://localhost:7083/api/PagEnt/pagamentoentrega/pagamento/{pagamento.Id}");
             requestPagamentoEntregas.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
             var responsePagamentoEntregas = Http.SendAsync(requestPagamentoEntregas).Result;
 
             if (responsePagamentoEntregas.StatusCode == HttpStatusCode.NotFound)
             {
-                // throw new Exception("PagamentoEntrega não encontrado para o pagamento especificado.");
                 return valorBruto;
             }
 
@@ -365,14 +360,12 @@ else
 
             foreach (var pagamentoEntrega in pagamentoEntregas)
             {
-                // Obter o valor da entrega da tabela Entrega
                 var requestEntrega = new HttpRequestMessage(HttpMethod.Get, $"https://localhost:7083/api/Entrega/entregas/id/{pagamentoEntrega.FkEntrega}");
                 requestEntrega.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
                 var responseEntrega = Http.SendAsync(requestEntrega).Result;
 
                 if (responseEntrega.StatusCode == HttpStatusCode.NotFound)
                 {
-                    // throw new Exception("Entrega não encontrada para o ID especificado.");
                     return valorBruto;
                 }
 
@@ -421,6 +414,7 @@ else
         public int FkEntregador { get; set; }
         public DateOnly Periodo { get; set; }
         public decimal ValorLiquido { get; set; }
+        public string? CidadeNome { get; set; }
     }
 
     public class PagamentoEntrega
@@ -445,6 +439,15 @@ else
         public int Id { get; set; }
         public decimal Valor { get; set; }
     }
+
+    public class Cidade
+    {
+        public int Id { get; set; }
+        public string? Nome { get; set; }
+        public int FkEstado { get; set; }
+        public bool Situacao { get; set; }
+    }
+
 
     public class FiltroPagamento
     {
