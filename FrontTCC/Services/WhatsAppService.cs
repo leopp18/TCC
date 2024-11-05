@@ -2,57 +2,99 @@
 using System.Diagnostics;
 using WindowsInput.Native;
 using WindowsInput;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
 namespace FrontTCC.Services
 {
     public class WhatsAppService
     {
-        // Método para abrir o WhatsApp Web com a conversa pré-preenchida
+        // Importa a função para buscar uma janela ativa pelo título
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool IsWindow(IntPtr hWnd);
+
+        // Método para verificar se uma das janelas do WhatsApp está aberta
+        private bool IsWhatsAppWindowOpen()
+        {
+            string[] titles = { "WhatsApp", "WhatsApp Web", "Compartilhe no WhatsApp",
+                                "WhatsApp - Google Chrome", "WhatsApp Web - Google Chrome",
+                                "Compartilhe no WhatsApp - Google Chrome" };
+
+            foreach (string title in titles)
+            {
+                IntPtr hWnd = FindWindow(null, title);
+                if (IsWindow(hWnd))
+                {
+                    return true; // Retorna true se qualquer uma das janelas for encontrada
+                }
+            }
+            return false; // Retorna false se nenhuma das janelas estiver aberta
+        }
+
         public async Task OpenWhatsAppChat(string phoneNumber, string message)
         {
-            // Formatar a mensagem para URL (substitui espaços por %20, etc.)
             string encodedMessage = System.Net.WebUtility.UrlEncode(message);
-
-            // Criar a URL do WhatsApp
             string url = $"https://wa.me/{phoneNumber}?text={encodedMessage}";
 
-            // Abrir a URL no navegador padrão
             Process.Start(new ProcessStartInfo
             {
                 FileName = url,
-                UseShellExecute = true // Usa o shell do sistema para abrir a URL
+                UseShellExecute = true
             });
 
-            await Task.Delay(5000); // Aguarda 5 segundos (ajuste conforme necessário)
+            await Task.Delay(5000); // Aguarda o navegador abrir a aba
 
-            // Simula as teclas usando InputSimulator
             var simulator = new InputSimulator();
 
-            // Simular o pressionamento de teclas (Tab + Enter)
-            simulator.Keyboard.KeyPress(VirtualKeyCode.TAB);//1
-            await Task.Delay(500);
-            simulator.Keyboard.KeyPress(VirtualKeyCode.RETURN);//1
-            await Task.Delay(500);
-            simulator.Keyboard.KeyPress(VirtualKeyCode.TAB);//2
-            await Task.Delay(500);
-            simulator.Keyboard.KeyPress(VirtualKeyCode.RETURN);
-            await Task.Delay(3000);
-            simulator.Keyboard.KeyPress(VirtualKeyCode.TAB);
-            await Task.Delay(500);
-            simulator.Keyboard.KeyPress(VirtualKeyCode.TAB);
-            await Task.Delay(500);
-            simulator.Keyboard.KeyPress(VirtualKeyCode.RETURN);
-            await Task.Delay(10000);
+            // Loop para verificar se uma das janelas do WhatsApp ainda está aberta
+            while (IsWhatsAppWindowOpen())
+            {
+                // Verificar novamente se a janela ainda está aberta antes de cada ação
+                if (!IsWhatsAppWindowOpen()) break;
+                simulator.Keyboard.KeyPress(VirtualKeyCode.TAB);
+                await Task.Delay(500);
 
-            //envia
-            simulator.Keyboard.KeyPress(VirtualKeyCode.RETURN);
+                if (!IsWhatsAppWindowOpen()) break;
+                simulator.Keyboard.KeyPress(VirtualKeyCode.RETURN);
+                await Task.Delay(500);
 
-            await Task.Delay(3000);
+                if (!IsWhatsAppWindowOpen()) break;
+                simulator.Keyboard.KeyPress(VirtualKeyCode.TAB);
+                await Task.Delay(500);
 
-            simulator.Keyboard.KeyDown(VirtualKeyCode.CONTROL); // Pressiona Ctrl
-            simulator.Keyboard.KeyPress(VirtualKeyCode.VK_W);   // Pressiona W
-            simulator.Keyboard.KeyUp(VirtualKeyCode.CONTROL);
+                if (!IsWhatsAppWindowOpen()) break;
+                simulator.Keyboard.KeyPress(VirtualKeyCode.RETURN);
+                await Task.Delay(3000);
+
+                if (!IsWhatsAppWindowOpen()) break;
+                simulator.Keyboard.KeyPress(VirtualKeyCode.TAB);
+                await Task.Delay(500);
+
+                if (!IsWhatsAppWindowOpen()) break;
+                simulator.Keyboard.KeyPress(VirtualKeyCode.TAB);
+                await Task.Delay(500);
+
+                if (!IsWhatsAppWindowOpen()) break;
+                simulator.Keyboard.KeyPress(VirtualKeyCode.RETURN);
+                await Task.Delay(10000);
+
+                if (!IsWhatsAppWindowOpen()) break;
+                simulator.Keyboard.KeyPress(VirtualKeyCode.RETURN);
+                await Task.Delay(3000);
+
+                // Fecha a aba do navegador se ainda estiver aberta
+                if (IsWhatsAppWindowOpen())
+                {
+                    simulator.Keyboard.KeyDown(VirtualKeyCode.CONTROL);
+                    simulator.Keyboard.KeyPress(VirtualKeyCode.VK_W);
+                    simulator.Keyboard.KeyUp(VirtualKeyCode.CONTROL);
+                }
+
+                break; // Interrompe o loop ao concluir as ações
+            }
         }
     }
 }

@@ -4,8 +4,9 @@
 @using Blazorise
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
-@inject HttpClient Http
+@using System.Text.Json
 @inject IJSRuntime JS
+@inject ApiService ApiService
 @inject AuthenticationStateProvider AuthenticationStateProvider
 
 <PageTitle>Estados</PageTitle>
@@ -111,16 +112,11 @@ else
     {
         try
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, "https://localhost:7083/api/Estado/estados");
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-            var response = await Http.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-            estados = await response.Content.ReadFromJsonAsync<List<Estado>>() ?? new List<Estado>();
+            estados = await ApiService.GetDataAsync<List<Estado>>("api/Estado/estados", token) ?? new List<Estado>();
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             ShowAlert("Erro ao carregar estados", Color.Danger);
-            Console.WriteLine($"Erro ao carregar estados: {ex.Message}");
         }
     }
 
@@ -152,22 +148,23 @@ else
     {
         try
         {
-            var request = new HttpRequestMessage(isEditMode ? HttpMethod.Put : HttpMethod.Post, 
-                isEditMode ? $"https://localhost:7083/api/Estado/estados/{newState.Id}" : "https://localhost:7083/api/Estado/estados");
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-            request.Content = JsonContent.Create(newState);
+            if (isEditMode)
+            {
+                await ApiService.PutDataAsync<Estado>($"api/Estado/estados/{newState.Id}", JsonContent.Create(newState), token);
+                ShowAlert("Estado alterado com sucesso!", Color.Success);
+            }
+            else
+            {
+                await ApiService.PostDataAsync<Estado>("api/Estado/estados", JsonContent.Create(newState), token);
+                ShowAlert("Estado cadastrado com sucesso!", Color.Success);
+            }
 
-            var response = await Http.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-
-            ShowAlert(isEditMode ? "Estado alterado com sucesso!" : "Estado cadastrado com sucesso!", Color.Success);
             await LoadEstados();
             showNewStateModal = false;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             ShowAlert("Erro ao salvar estado!", Color.Danger);
-            Console.WriteLine($"Erro ao salvar estado: {ex.Message}");
         }
     }
 

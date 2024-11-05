@@ -4,8 +4,9 @@
 @using Blazorise
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
-@inject HttpClient Http
+@using System.Text.Json
 @inject IJSRuntime JS
+@inject ApiService ApiService
 @inject AuthenticationStateProvider AuthenticationStateProvider
 
 <PageTitle>Tipos de Entrega</PageTitle>
@@ -124,17 +125,12 @@ else
     {
         try
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, "https://localhost:7083/api/Entrega/entregas");
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-            var response = await Http.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-            entregas = await response.Content.ReadFromJsonAsync<List<Entrega>>() ?? new List<Entrega>();
+            entregas = await ApiService.GetDataAsync<List<Entrega>>("api/Entrega/entregas", token) ?? new List<Entrega>();
             entregas = entregas.OrderBy(e => e.Nome).ThenBy(e => e.Valor).ToList();
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             ShowAlert("Erro ao carregar entregas", Color.Danger);
-            Console.WriteLine($"Erro ao carregar entregas: {ex.Message}");
         }
     }
 
@@ -167,22 +163,23 @@ else
     {
         try
         {
-            var request = new HttpRequestMessage(isEditMode ? HttpMethod.Put : HttpMethod.Post,
-                isEditMode ? $"https://localhost:7083/api/Entrega/entregas/{newEntrega.Id}" : "https://localhost:7083/api/Entrega/entregas");
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-            request.Content = JsonContent.Create(newEntrega);
+            if (isEditMode)
+            {
+                await ApiService.PutDataAsync<Entrega>($"api/Entrega/entregas/{newEntrega.Id}", JsonContent.Create(newEntrega), token);
+                ShowAlert("Entrega alterada com sucesso!", Color.Success);
+            }
+            else
+            {
+                await ApiService.PostDataAsync<Entrega>("api/Entrega/entregas", JsonContent.Create(newEntrega), token);
+                ShowAlert("Entrega cadastrada com sucesso!", Color.Success);
+            }
 
-            var response = await Http.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-
-            ShowAlert(isEditMode ? "Entrega alterada com sucesso!" : "Entrega cadastrada com sucesso!", Color.Success);
             await LoadEntregas();
             showNewEntregaModal = false;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             ShowAlert("Erro ao salvar entrega!", Color.Danger);
-            Console.WriteLine($"Erro ao salvar entrega: {ex.Message}");
         }
     }
 
@@ -194,25 +191,18 @@ else
             if (entrega != null)
             {
                 entrega.Situacao = false;
-                var request = new HttpRequestMessage(HttpMethod.Put, $"https://localhost:7083/api/Entrega/entregas/{entrega.Id}");
-                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-                request.Content = JsonContent.Create(entrega);
-
-                var response = await Http.SendAsync(request);
-                response.EnsureSuccessStatusCode();
+                await ApiService.PutDataAsync<Entrega>($"api/Entrega/entregas/{entrega.Id}", JsonContent.Create(entrega), token);
 
                 await LoadEntregas();
                 ShowAlert("Entrega inativada com sucesso!", Color.Success);
             }
             else
             {
-                Console.WriteLine($"Entrega com ID: {id} não encontrada.");
                 ShowAlert("Erro ao inativar entrega!", Color.Danger);
             }
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            Console.WriteLine($"Erro ao marcar entrega como inativa: {ex.Message}");
             ShowAlert("Erro ao inativar entrega!", Color.Danger);
         }
     }

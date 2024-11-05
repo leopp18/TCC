@@ -4,8 +4,9 @@
 @using Blazorise
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
-@inject HttpClient Http
+@using System.Text.Json
 @inject IJSRuntime JS
+@inject ApiService ApiService
 @inject AuthenticationStateProvider AuthenticationStateProvider
 
 <PageTitle>Cidades</PageTitle>
@@ -64,8 +65,8 @@
             </ModalHeader>
             <ModalBody>
                 <div class="form-group">
-                    <label for="nome">Nome</label>
-                    <input type="text" class="form-control" id="nome" @bind="newCity.Nome" />
+                    <label for="Nome">Nome</label>
+                    <input type="text" class="form-control" id="Nome" @bind="newCity.Nome" />
                 </div>
                 <div class="form-group">
                     <label for="estado">Estado</label>
@@ -132,19 +133,14 @@ else
     {
         try
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, "https://localhost:7083/api/Cidade/cidades");
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-            var response = await Http.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-            var cidadesResponse = await response.Content.ReadFromJsonAsync<List<Cidade>>() ?? new List<Cidade>();
-
+            var cidadesResponse = await ApiService.GetDataAsync<List<Cidade>>("api/Cidade/cidades", token);
             // Associar estados às cidades
             foreach (var cidade in cidadesResponse)
             {
                 cidade.Estado = estados.FirstOrDefault(e => e.Id == cidade.FkEstado);
                 if (cidade.Estado == null)
                 {
-                    Console.WriteLine($"Estado não encontrado para a cidade: {cidade.Nome} (EstadoId: {cidade.FkEstado})");
+                    Console.WriteLine($"Estado não encontrado para a cidade: {cidade.Nome} (Estadoid: {cidade.FkEstado})");
                 }
                 else
                 {
@@ -153,28 +149,24 @@ else
             }
 
             cidades = cidadesResponse;
+            cidades = cidades.OrderBy(e => e.Nome).ToList();
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             ShowAlert("Erro ao carregar cidades", Color.Danger);
-            Console.WriteLine($"Erro ao carregar cidades: {ex.Message}");
         }
     }
+
 
     private async Task LoadEstados()
     {
         try
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, "https://localhost:7083/api/Estado/estados");
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-            var response = await Http.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-            estados = await response.Content.ReadFromJsonAsync<List<Estado>>() ?? new List<Estado>();
+            estados = await ApiService.GetDataAsync<List<Estado>>("api/Estado/estados", token);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             ShowAlert("Erro ao carregar estados", Color.Danger);
-            Console.WriteLine($"Erro ao carregar estados: {ex.Message}");
         }
     }
 
@@ -207,22 +199,23 @@ else
     {
         try
         {
-            var request = new HttpRequestMessage(isEditMode ? HttpMethod.Put : HttpMethod.Post, 
-                isEditMode ? $"https://localhost:7083/api/Cidade/cidades/{newCity.Id}" : "https://localhost:7083/api/Cidade/cidades");
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-            request.Content = JsonContent.Create(newCity);
+            if (isEditMode)
+            {
+                await ApiService.PutDataAsync<Cidade>($"api/Cidade/cidades/{newCity.Id}", JsonContent.Create(newCity), token);
+                ShowAlert("Cidade alterada com sucesso!", Color.Success);
+            }
+            else
+            {
+                await ApiService.PostDataAsync<Cidade>("api/Cidade/cidades", JsonContent.Create(newCity), token);
+                ShowAlert("Cidade cadastrada com sucesso!", Color.Success);
+            }
 
-            var response = await Http.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-
-            ShowAlert(isEditMode ? "Cidade alterada com sucesso!" : "Cidade cadastrada com sucesso!", Color.Success);
             await LoadCidades();
             showNewCityModal = false;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             ShowAlert("Erro ao salvar cidade!", Color.Danger);
-            Console.WriteLine($"Erro ao salvar cidade: {ex.Message}");
         }
     }
 
@@ -236,12 +229,7 @@ else
             {
                 // Atualizar o status da cidade para inativo
                 cidade.Situacao = false;
-                var request = new HttpRequestMessage(HttpMethod.Put, $"https://localhost:7083/api/Cidade/cidades/{cidade.Id}");
-                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-                request.Content = JsonContent.Create(cidade);
-
-                var response = await Http.SendAsync(request);
-                response.EnsureSuccessStatusCode();
+                await ApiService.PutDataAsync<Cidade>($"api/Cidade/cidades/{cidade.Id}", JsonContent.Create(cidade), token);
 
                 await LoadCidades();
                 ShowAlert("Cidade inativada com sucesso!", Color.Success);
@@ -252,10 +240,9 @@ else
                 Console.WriteLine($"Cidade com ID: {id} não encontrada.");
             }
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             ShowAlert("Erro ao inativar cidade!", Color.Danger);
-            Console.WriteLine($"Erro ao marcar cidade como inativa: {ex.Message}");
         }
     }
 

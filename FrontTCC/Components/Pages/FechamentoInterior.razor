@@ -1,12 +1,14 @@
 ﻿@page "/fechamento-interior"
 @using System.Net
-@using Microsoft.AspNetCore.Components.Authorization
 @rendermode InteractiveServer
 
+@using Microsoft.AspNetCore.Components.Authorization
 @inject FrontTCC.Services.WhatsAppService WhatsAppService
+
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@using System.Text.Json
 @inject IJSRuntime JS
-@inject HttpClient Http
+@inject ApiService ApiService
 
 <PageTitle>Fechamento Interior</PageTitle>
 
@@ -168,15 +170,11 @@ else
     {
         try
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, "https://localhost:7083/api/Entregador/entregadores");
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-            var response = await Http.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-            entregadores = await response.Content.ReadFromJsonAsync<List<Entregador>>() ?? new List<Entregador>();
+            entregadores = await ApiService.GetDataAsync<List<Entregador>>("api/Entregador/entregadores", token);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            Console.WriteLine($"Erro ao carregar entregadores: {ex.Message}");
+            ShowAlert("Erro ao carregar entregadores", Color.Danger);
         }
     }
 
@@ -185,11 +183,7 @@ else
         try
         {
             DateTime data = new DateTime(filtroPagamento.Ano, filtroPagamento.Mes, 10);
-            var request = new HttpRequestMessage(HttpMethod.Get, $"https://localhost:7083/api/Pagamento/pagamentos/{data:yyyy-MM-dd}");
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-            var response = await Http.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-            pagamentos = await response.Content.ReadFromJsonAsync<List<Pagamento>>() ?? new List<Pagamento>();
+            pagamentos = await ApiService.GetDataAsync<List<Pagamento>>($"api/Pagamento/pagamentos/{data:yyyy-MM-dd}", token);
 
             foreach (var pagamento in pagamentos)
             {
@@ -215,7 +209,6 @@ else
         catch (Exception ex)
         {
             ShowAlert("Erro ao carregar pagamentos", Color.Danger);
-            Console.WriteLine($"Erro ao carregar pagamentos: {ex.Message}");
         }
     }
 
@@ -223,11 +216,7 @@ else
     {
         try
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, "https://localhost:7083/api/Cidade/cidades");
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-            var response = await Http.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-            cidades = await response.Content.ReadFromJsonAsync<List<Cidade>>() ?? new List<Cidade>();
+            cidades = await ApiService.GetDataAsync<List<Cidade>>("api/Cidade/cidades", token);
             cidades = cidades.Where(e => e.Situacao).ToList();
 
             foreach (var pagamento in pagamentos)
@@ -239,7 +228,6 @@ else
         catch (Exception ex)
         {
             ShowAlert("Erro ao carregar cidades", Color.Danger);
-            Console.WriteLine($"Erro ao carregar cidades: {ex.Message}");
         }
     }
 
@@ -261,12 +249,26 @@ else
                 decimal valorBruto = CalcularValorBruto(entregador.Id, pagamento.Periodo);
                 decimal valorLiquido = valorBruto - pagamento.Desconto.GetValueOrDefault() - pagamento.Adiantamento.GetValueOrDefault() + pagamento.Adicional.GetValueOrDefault();
 
-                string mensagem = $"Olá {entregador.Nome}! Segue fechamento referente a {filtroPagamento.Quinzena}ª quinzena de {filtroPagamento.Mes}/{filtroPagamento.Ano}\n\n" +
-                                  $"Valor Bruto: {valorBruto:C}\n" +
+                var pagamentoEntregas = await ApiService.GetDataAsync<List<PagamentoEntrega>>($"api/PagEnt/pagamentoentrega/pagamento/{pagamento.Id}", token);
+
+                string entregasInfo = string.Empty;
+                foreach (var pagamentoEntrega in pagamentoEntregas)
+                {
+                    var entrega = await ApiService.GetDataAsync<Entrega>($"api/Entrega/entregas/id/{pagamentoEntrega.FkEntrega}", token);
+
+                    if (entrega != null && pagamentoEntrega.Quantidade > 0)
+                    {
+                        entregasInfo += $"{entrega.Nome}: {pagamentoEntrega.Quantidade}\n";
+                    }
+                }
+
+                string mensagem = $"Olá, {entregador.Nome}! Segue fechamento referente ao período de {filtroPagamento.Mes}/{filtroPagamento.Ano}\n\n" +
+                                  entregasInfo +
+                                  $"\nValor Bruto: {valorBruto:C}\n" +
                                   $"Desconto: {pagamento.Desconto.GetValueOrDefault():C}\n" +
                                   $"Adiantamento: {pagamento.Adiantamento.GetValueOrDefault():C}\n" +
                                   $"Adicional: {pagamento.Adicional.GetValueOrDefault():C}\n" +
-                                  $"Valor Líquido: *{valorLiquido:C}*";
+                                  $"Valor Líquido: *{valorLiquido:C}*\n";
 
                 await WhatsAppService.OpenWhatsAppChat(entregador.Celular, mensagem);
             }
@@ -277,7 +279,7 @@ else
         }
         else
         {
-            Console.WriteLine("Número de telefone inválido ou entregador nulo.");
+            ShowAlert("Número de telefone inválido ou entregador nulo.", Color.Danger);
         }
     }
 
@@ -289,19 +291,15 @@ else
     private void OnPagoChanged(Pagamento pagamento, bool value)
     {
         pagamento.Pago = value;
-        var request = new HttpRequestMessage(HttpMethod.Put, $"https://localhost:7083/api/Pagamento/pagamentos/{pagamento.Id}");
-        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-        request.Content = JsonContent.Create(pagamento);
-        Http.SendAsync(request);
+        var content = JsonContent.Create(pagamento);
+        ApiService.PutDataAsync<Pagamento>($"api/Pagamento/pagamentos/{pagamento.Id}", content, token);
     }
 
     private void OnNotaFiscalChanged(Pagamento pagamento, bool value)
     {
         pagamento.NotaFiscal = value;
-        var request = new HttpRequestMessage(HttpMethod.Put, $"https://localhost:7083/api/Pagamento/pagamentos/{pagamento.Id}");
-        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-        request.Content = JsonContent.Create(pagamento);
-        Http.SendAsync(request);
+        var content = JsonContent.Create(pagamento);
+        ApiService.PutDataAsync<Pagamento>($"api/Pagamento/pagamentos/{pagamento.Id}", content, token);
     }
 
     private string GetRowClass(bool pago)
@@ -309,71 +307,71 @@ else
         return pago ? "linha-paga" : string.Empty;
     }
 
-    private void UpdateValorLiquido(Pagamento pagamento, Entregador entregador)
+    private async Task UpdateValorLiquido(Pagamento pagamento, Entregador entregador)
     {
         decimal valorBruto = CalcularValorBruto(entregador.Id, pagamento.Periodo);
         pagamento.ValorLiquido = valorBruto - pagamento.Desconto.GetValueOrDefault() - pagamento.Adiantamento.GetValueOrDefault() + pagamento.Adicional.GetValueOrDefault();
-        var request = new HttpRequestMessage(HttpMethod.Put, $"https://localhost:7083/api/Pagamento/pagamentos/{pagamento.Id}");
-        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-        request.Content = JsonContent.Create(pagamento);
-        Http.SendAsync(request);
+        var content = JsonContent.Create(pagamento);
+        await ApiService.PutDataAsync<Pagamento>($"api/Pagamento/pagamentos/{pagamento.Id}", content, token);
+    }
+
+    private string GetNomeEntrega(int fkEntrega)
+    {
+        try
+        {
+            var entrega = ApiService.GetData<Entrega>($"api/Entrega/entregas/id/{fkEntrega}", token);
+            return entrega?.Nome.Replace(" ", "%20") ?? string.Empty;
+        }
+        catch (Exception)
+        {
+            return string.Empty;
+        }
     }
 
     private decimal CalcularValorBruto(int entregadorId, DateOnly periodo)
     {
         decimal valorBruto = 0;
 
-        var requestPagamentos = new HttpRequestMessage(HttpMethod.Get, $"https://localhost:7083/api/Pagamento/pagamentos/{periodo:yyyy-MM-dd}/{entregadorId}");
-        requestPagamentos.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-        var responsePagamentos = Http.SendAsync(requestPagamentos).Result;
-
-        if (responsePagamentos.StatusCode == HttpStatusCode.NotFound)
+        try
         {
-            return valorBruto;
-        }
+            var pagamentos = ApiService.GetData<List<Pagamento>>($"api/Pagamento/pagamentos/{periodo:yyyy-MM-dd}/{entregadorId}", token);
 
-        var pagamentos = responsePagamentos.Content.ReadFromJsonAsync<List<Pagamento>>().Result;
-
-        if (pagamentos == null)
-        {
-            return valorBruto;
-        }
-
-        foreach (var pagamento in pagamentos)
-        {
-            var requestPagamentoEntregas = new HttpRequestMessage(HttpMethod.Get, $"https://localhost:7083/api/PagEnt/pagamentoentrega/pagamento/{pagamento.Id}");
-            requestPagamentoEntregas.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-            var responsePagamentoEntregas = Http.SendAsync(requestPagamentoEntregas).Result;
-
-            if (responsePagamentoEntregas.StatusCode == HttpStatusCode.NotFound)
+            if (pagamentos != null)
             {
-                return valorBruto;
-            }
-
-            var pagamentoEntregas = responsePagamentoEntregas.Content.ReadFromJsonAsync<List<PagamentoEntrega>>().Result;
-
-            foreach (var pagamentoEntrega in pagamentoEntregas)
-            {
-                var requestEntrega = new HttpRequestMessage(HttpMethod.Get, $"https://localhost:7083/api/Entrega/entregas/id/{pagamentoEntrega.FkEntrega}");
-                requestEntrega.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-                var responseEntrega = Http.SendAsync(requestEntrega).Result;
-
-                if (responseEntrega.StatusCode == HttpStatusCode.NotFound)
+                foreach (var pagamento in pagamentos)
                 {
-                    return valorBruto;
-                }
+                    var pagamentoEntregas = ApiService.GetData<List<PagamentoEntrega>>($"api/PagEnt/pagamentoentrega/pagamento/{pagamento.Id}", token);
 
-                var entrega = responseEntrega.Content.ReadFromJsonAsync<Entrega>().Result;
+                    foreach (var pagamentoEntrega in pagamentoEntregas)
+                    {
+                        string nomeEntrega = GetNomeEntrega(pagamentoEntrega.FkEntrega);
+                        if (string.IsNullOrEmpty(nomeEntrega)) continue;
 
-                if (entrega != null)
-                {
-                    valorBruto += pagamentoEntrega.Quantidade * entrega.Valor;
+                        var entregadorEntrega = ApiService.GetData<List<EntregadorEntrega>>($"api/EntrEnt/entregador_entrega/{entregadorId}/nome/{nomeEntrega}", token);
+
+                        if (entregadorEntrega != null)
+                        {
+                            foreach (var item in entregadorEntrega)
+                            {
+                                decimal valorEntrega = item.FkEntregaNavigation?.Valor ?? 0;
+                                if (valorEntrega > 0)
+                                {
+                                    valorBruto += pagamentoEntrega.Quantidade * valorEntrega;
+                                }
+                            }
+                        }
+                    }
                 }
             }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Erro ao calcular valor bruto: {ex.Message}");
         }
 
         return valorBruto;
     }
+
 
     private bool showAlert = false;
     private string alertMessage = string.Empty;
@@ -420,18 +418,23 @@ else
         public DateOnly Periodo { get; set; }
     }
 
+    public class Entrega
+    {
+        public int Id { get; set; }
+        public string Nome { get; set; }
+        public decimal Valor { get; set; }
+        public bool Situacao { get; set; }
+        public List<PagamentoEntrega>? PagamentoEntregas { get; set; }
+        public List<EntregadorEntrega>? EntregadorEntregas { get; set; }
+    }
+
     public class EntregadorEntrega
     {
         public int Id { get; set; }
         public int FkEntregador { get; set; }
         public int FkEntrega { get; set; }
-        public decimal Valor { get; set; }
-    }
-
-    public class Entrega
-    {
-        public int Id { get; set; }
-        public decimal Valor { get; set; }
+        public Entrega? FkEntregaNavigation { get; set; }
+        public Entregador? FkEntregadorNavigation { get; set; }
     }
 
     public class Cidade

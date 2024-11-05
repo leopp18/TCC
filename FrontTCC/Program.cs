@@ -5,6 +5,7 @@ using Blazorise.Icons.FontAwesome;
 using System.Net.Http;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using FrontTCC.Services;
 
 namespace FrontTCC
 {
@@ -31,6 +32,8 @@ namespace FrontTCC
             // Adicione o serviço de autenticação
             builder.Services.AddScoped<AuthService>();
             builder.Services.AddScoped<AuthenticationStateProvider>(provider => provider.GetRequiredService<AuthService>());
+            builder.Services.AddScoped<WhatsAppService>();
+            builder.Services.AddScoped<ApiService>();
 
 
             builder.Services.AddAuthorizationCore();

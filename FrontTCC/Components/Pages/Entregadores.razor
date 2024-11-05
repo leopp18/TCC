@@ -4,8 +4,9 @@
 @using Blazorise
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
-@inject HttpClient Http
+@using System.Text.Json
 @inject IJSRuntime JS
+@inject ApiService ApiService
 @inject AuthenticationStateProvider AuthenticationStateProvider
 
 <PageTitle>Entregadores</PageTitle>
@@ -135,17 +136,12 @@ else
     {
         try
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, "https://localhost:7083/api/Entregador/entregadores");
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-            var response = await Http.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-            entregadores = await response.Content.ReadFromJsonAsync<List<Entregador>>() ?? new List<Entregador>();
+            entregadores = await ApiService.GetDataAsync<List<Entregador>>("api/Entregador/entregadores", token) ?? new List<Entregador>();
             entregadores = entregadores.OrderBy(e => e.Nome).ToList();
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             ShowAlert("Erro ao carregar entregadores", Color.Danger);
-            Console.WriteLine($"Erro ao carregar entregadores: {ex.Message}");
         }
     }
 
@@ -186,15 +182,17 @@ else
             // Remover a máscara do número de celular
             newEntregador.Celular = newEntregador.Celular != null ? new string(newEntregador.Celular.Where(char.IsDigit).ToArray()) : string.Empty;
 
-            var request = new HttpRequestMessage(isEditMode ? HttpMethod.Put : HttpMethod.Post, 
-                isEditMode ? $"https://localhost:7083/api/Entregador/entregadores/{newEntregador.Id}" : "https://localhost:7083/api/Entregador/entregadores");
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-            request.Content = JsonContent.Create(newEntregador);
+            if (isEditMode)
+            {
+                await ApiService.PutDataAsync<Entregador>($"api/Entregador/entregadores/{newEntregador.Id}", JsonContent.Create(newEntregador), token);
+                ShowAlert("Entregador alterado com sucesso!", Color.Success);
+            }
+            else
+            {
+                await ApiService.PostDataAsync<Entregador>("api/Entregador/entregadores", JsonContent.Create(newEntregador), token);
+                ShowAlert("Entregador cadastrado com sucesso!", Color.Success);
+            }
 
-            var response = await Http.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-
-            ShowAlert(isEditMode ? "Entregador alterado com sucesso!" : "Entregador cadastrado com sucesso!", Color.Success);
             await LoadEntregadores();
             showNewDeliveryPersonModal = false;
         }
@@ -212,12 +210,7 @@ else
             if (entregador != null)
             {
                 entregador.Situacao = false;
-                var request = new HttpRequestMessage(HttpMethod.Put, $"https://localhost:7083/api/Entregador/entregadores/{entregador.Id}");
-                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-                request.Content = JsonContent.Create(entregador);
-
-                var response = await Http.SendAsync(request);
-                response.EnsureSuccessStatusCode();
+                await ApiService.PutDataAsync<Entregador>($"api/Entregador/entregadores/{entregador.Id}", JsonContent.Create(entregador), token);
 
                 await LoadEntregadores();
                 ShowAlert("Entregador inativado com sucesso!", Color.Success);

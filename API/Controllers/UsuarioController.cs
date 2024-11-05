@@ -76,6 +76,7 @@ namespace API_TCC.Controllers
 
         [HttpPost]
         [Route("usuarios")]
+        [Authorize]
         public async Task<IActionResult> PostAsync(
         [FromServices] Contexto contexto,
         [FromBody] Models.Usuario usuario)

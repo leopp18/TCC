@@ -4,8 +4,9 @@
 @using Blazorise
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
-@inject HttpClient Http
+@using System.Text.Json
 @inject IJSRuntime JS
+@inject ApiService ApiService
 @inject AuthenticationStateProvider AuthenticationStateProvider
 
 <PageTitle>Usuários</PageTitle>
@@ -35,7 +36,7 @@
         <TableBody>
             @if (usuarios != null)
             {
-                int rowIndex = 0;
+                int rowIndex = 1;
                 @foreach (var usuario in usuarios)
                 {
                     <tr>
@@ -118,18 +119,14 @@ else
     {
         try
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, "https://localhost:7083/api/Usuario/usuarios");
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-            var response = await Http.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-            usuarios = await response.Content.ReadFromJsonAsync<List<Usuario>>() ?? new List<Usuario>();
+            usuarios = await ApiService.GetDataAsync<List<Usuario>>("api/Usuario/usuarios", token) ?? new List<Usuario>();
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             ShowAlert("Erro ao carregar usuarios", Color.Danger);
-            Console.WriteLine($"Erro ao carregar usuarios: {ex.Message}");
         }
     }
+
 
     private void ShowNewUserModal()
     {
@@ -160,22 +157,22 @@ else
     {
         try
         {
-            var request = new HttpRequestMessage(isEditMode ? HttpMethod.Put : HttpMethod.Post, 
-                isEditMode ? $"https://localhost:7083/api/Usuario/usuarios/{newUser.Id}" : "https://localhost:7083/api/Usuario/usuarios");
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-            request.Content = JsonContent.Create(newUser);
-
-            var response = await Http.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-
-            ShowAlert(isEditMode ? "Usuario alterado com sucesso!" : "Usuario cadastrado com sucesso!", Color.Success);
+            if (isEditMode)
+            {
+                await ApiService.PutDataAsync<Usuario>($"api/Usuario/usuarios/{newUser.Id}", JsonContent.Create(newUser), token);
+                ShowAlert("Usuario alterado com sucesso!", Color.Success);
+            }
+            else
+            {
+                await ApiService.PostDataAsync<Usuario>("api/Usuario/usuarios", JsonContent.Create(newUser), token);
+                ShowAlert("Usuario cadastrado com sucesso!", Color.Success);
+            }
             await LoadUsuarios();
             showNewUserModal = false;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             ShowAlert("Erro ao salvar usuario!", Color.Danger);
-            Console.WriteLine($"Erro ao salvar usuario: {ex.Message}");
         }
     }
 
@@ -183,19 +180,13 @@ else
     {
         try
         {
-            var request = new HttpRequestMessage(HttpMethod.Delete, $"https://localhost:7083/api/Usuario/usuarios/{id}");
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-
-            var response = await Http.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-
+            await ApiService.DeleteDataAsync<Usuario>($"api/Usuario/usuarios/{id}", token);
             await LoadUsuarios();
             ShowAlert("Usuario excluído com sucesso!", Color.Success);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             ShowAlert("Erro ao excluir usuario!", Color.Danger);
-            Console.WriteLine($"Erro ao excluir usuario: {ex.Message}");
         }
     }
 

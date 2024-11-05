@@ -4,8 +4,9 @@
 
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
-@inject HttpClient Http
+@using System.Text.Json
 @inject IJSRuntime JS
+@inject ApiService ApiService
 @inject AuthenticationStateProvider AuthenticationStateProvider
 
 <PageTitle>Quantidades Sede</PageTitle>
@@ -145,53 +146,45 @@ else
     }
 
     private async Task LoadEntregadores()
+{
+    try
     {
-        try
+        var todosEntregadores = await ApiService.GetDataAsync<List<Entregador>>("api/Entregador/entregadores", token) ?? new List<Entregador>();
+
+        DateOnly dataMesAnterior = new DateOnly(filtroPagamento.Ano, filtroPagamento.Mes - 1, 10);
+        var pagamentosMesAnterior = await ApiService.GetDataAsync<List<Pagamento>>($"api/Pagamento/pagamentos/{dataMesAnterior.ToString("yyyy-MM-dd")}", token) ?? new List<Pagamento>();
+
+        DateTime dataFiltro = new DateTime(filtroPagamento.Ano, filtroPagamento.Mes, 1);
+        DateTime doisMesesAtras = DateTime.Now.AddMonths(-2);
+
+        if (dataFiltro < doisMesesAtras)
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, "https://localhost:7083/api/Entregador/entregadores");
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-            var response = await Http.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-
-            var todosEntregadores = await response.Content.ReadFromJsonAsync<List<Entregador>>() ?? new List<Entregador>();
-            todosEntregadores = todosEntregadores.Where(e => e.Situacao).ToList(); // Filtrar apenas entregadores ativos
-
-            DateOnly dataMesAnterior = new DateOnly(filtroPagamento.Ano, filtroPagamento.Mes - 1, 10);
-
-            var requestPagamentos = new HttpRequestMessage(HttpMethod.Get, $"https://localhost:7083/api/Pagamento/pagamentos/{dataMesAnterior.ToString("yyyy-MM-dd")}");
-            requestPagamentos.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-            var responsePagamentos = await Http.SendAsync(requestPagamentos);
-            responsePagamentos.EnsureSuccessStatusCode();
-
-            var pagamentosMesAnterior = await responsePagamentos.Content.ReadFromJsonAsync<List<Pagamento>>() ?? new List<Pagamento>();
-
             entregadores = todosEntregadores.Where(e => !pagamentosMesAnterior.Any(p => p.FkEntregador == e.Id)).ToList();
-
-            Console.WriteLine($"Entregadores carregados: {entregadores.Count}");
         }
-        catch (Exception ex)
+        else
         {
-            ShowAlert("Erro ao carregar entregadores", Color.Danger);
+            todosEntregadores = todosEntregadores.Where(e => e.Situacao).ToList();
+            entregadores = todosEntregadores.Where(e => !pagamentosMesAnterior.Any(p => p.FkEntregador == e.Id)).ToList();
         }
     }
+    catch (Exception ex)
+    {
+        ShowAlert("Erro ao carregar entregadores", Color.Danger);
+    }
+}
+
 
     private async Task LoadEntregas()
     {
         try
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, "https://localhost:7083/api/Entrega/entregas");
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-            var response = await Http.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-
-            entregas = await response.Content.ReadFromJsonAsync<List<Entrega>>() ?? new List<Entrega>();
-            entregas = entregas.Where(e => e.Situacao && e.Nome != "Kms").ToList(); // Filtrar apenas entregas ativas
+            entregas = await ApiService.GetDataAsync<List<Entrega>>("api/Entrega/entregas", token) ?? new List<Entrega>();
+            entregas = entregas.Where(e => e.Situacao && e.Nome != "Kms").ToList();
             entregas = entregas
-                .GroupBy(e => e.Nome) // Agrupa por nome
-                .Select(g => g.First()) // Seleciona o primeiro item de cada grupo
+                .GroupBy(e => e.Nome)
+                .Select(g => g.First())
                 .OrderBy(e => e.Nome)
                 .ThenBy(e => e.Valor).ToList();
-            Console.WriteLine($"Entregas carregadas: {entregas.Count}");
         }
         catch (Exception ex)
         {
@@ -203,28 +196,11 @@ else
     {
         try
         {
-            Console.WriteLine("Filtro quinzena: " + filtroPagamento.Quinzena);
-            Console.WriteLine("Filtro mês: " + filtroPagamento.Mes);
-            DateOnly data;
-            if (filtroPagamento.Quinzena == 1)
-            {
-                data = new DateOnly(filtroPagamento.Ano, filtroPagamento.Mes, 1);
-            }
-            else if (filtroPagamento.Quinzena == 2)
-            {
-                data = new DateOnly(filtroPagamento.Ano, filtroPagamento.Mes, 16);
-            }
-            else
-            {
-                data = new DateOnly(filtroPagamento.Ano, filtroPagamento.Mes, 2);
-            }
+            DateOnly data = filtroPagamento.Quinzena == 1
+                ? new DateOnly(filtroPagamento.Ano, filtroPagamento.Mes, 1)
+                : new DateOnly(filtroPagamento.Ano, filtroPagamento.Mes, 16);
 
-            var request = new HttpRequestMessage(HttpMethod.Get, $"https://localhost:7083/api/Pagamento/pagamentos/{data.ToString("yyyy-MM-dd")}");
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-            var response = await Http.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-
-            pagamentos = await response.Content.ReadFromJsonAsync<List<Pagamento>>() ?? new List<Pagamento>();
+            pagamentos = await ApiService.GetDataAsync<List<Pagamento>>($"api/Pagamento/pagamentos/{data.ToString("yyyy-MM-dd")}", token) ?? new List<Pagamento>();
 
             foreach (var entregador in entregadores)
             {
@@ -236,12 +212,7 @@ else
                 var entregador = entregadores.FirstOrDefault(e => e.Id == pagamento.FkEntregador);
                 if (entregador != null)
                 {
-                    var requestPagEnt = new HttpRequestMessage(HttpMethod.Get, $"https://localhost:7083/api/PagEnt/pagamentoentrega/pagamento/{pagamento.Id}");
-                    requestPagEnt.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-                    var responsePagEnt = await Http.SendAsync(requestPagEnt);
-                    responsePagEnt.EnsureSuccessStatusCode();
-
-                    var pagamentoEntregas = await responsePagEnt.Content.ReadFromJsonAsync<List<PagamentoEntrega>>() ?? new List<PagamentoEntrega>();
+                    var pagamentoEntregas = await ApiService.GetDataAsync<List<PagamentoEntrega>>($"api/PagEnt/pagamentoentrega/pagamento/{pagamento.Id}", token) ?? new List<PagamentoEntrega>();
 
                     foreach (var pagamentoEntrega in pagamentoEntregas)
                     {
@@ -284,55 +255,31 @@ else
     {
         try
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, $"https://localhost:7083/api/Pagamento/pagamentos/{data.ToString("yyyy-MM-dd")}/{fkEntregador}");
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-            var response = await Http.SendAsync(request);
-
-            if (response.IsSuccessStatusCode)
+            var pagamentoResponse = await ApiService.GetDataAsync<List<Pagamento>>($"api/Pagamento/pagamentos/{data.ToString("yyyy-MM-dd")}/{fkEntregador}", token) ?? new List<Pagamento>();
+            foreach (var pagamento in pagamentoResponse)
             {
-                var pagamentoResponse = await response.Content.ReadFromJsonAsync<List<Pagamento>>() ?? new List<Pagamento>();
-                foreach (var pagamento in pagamentoResponse)
+                if (pagamento != null)
                 {
-                    if (pagamento != null)
-                    {
-                        return pagamento.Id;
-                    }
+                    return pagamento.Id;
                 }
-                throw new PagamentoNaoEncontradoException("Pagamento não encontrado para a data e entregador especificados.");
             }
-            else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-            {
-                throw new PagamentoNaoEncontradoException("Pagamento não encontrado para a data e entregador especificados.");
-            }
-            else
-            {
-                response.EnsureSuccessStatusCode();
-            }
-            return 0;
+            throw new PagamentoNaoEncontradoException("Pagamento não encontrado para a data e entregador especificados.");
         }
         catch (PagamentoNaoEncontradoException)
         {
             var novoPagamento = new Pagamento
-                {
-                    FkEntregador = fkEntregador,
-                    Periodo = data,
-                    FkCidade = 1,
-                    Adicional = null,
-                    Desconto = null,
-                    Adiantamento = null,
-                    Pago = false,
-                    NotaFiscal = false
-                };
+            {
+                FkEntregador = fkEntregador,
+                Periodo = data,
+                FkCidade = 1,
+                Adicional = null,
+                Desconto = null,
+                Adiantamento = null,
+                Pago = false,
+                NotaFiscal = false
+            };
 
-            Console.WriteLine($"Criando novo pagamento: {System.Text.Json.JsonSerializer.Serialize(novoPagamento)}");
-
-            var request = new HttpRequestMessage(HttpMethod.Post, "https://localhost:7083/api/Pagamento/pagamentos");
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-            request.Content = JsonContent.Create(novoPagamento);
-            var response = await Http.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-
-            var createdPagamento = await response.Content.ReadFromJsonAsync<Pagamento>();
+            var createdPagamento = await ApiService.PostDataAsync<Pagamento>("api/Pagamento/pagamentos", JsonContent.Create(novoPagamento), token);
             return createdPagamento?.Id ?? 0;
         }
         catch (Exception ex)
@@ -348,71 +295,53 @@ else
     }
 
     private async Task SaveQuantidades(Entregador entregador, Entrega entrega, int valor)
+{
+    try
     {
-        try
+        DateOnly data = filtroPagamento.Quinzena == 1
+            ? new DateOnly(filtroPagamento.Ano, filtroPagamento.Mes, 1)
+            : new DateOnly(filtroPagamento.Ano, filtroPagamento.Mes, 16);
+
+        int pagamentoId = await EnsurePagamentoExists(entregador.Id, data);
+        if (pagamentoId == 0)
         {
-            DateOnly data = filtroPagamento.Quinzena == 1
-                ? new DateOnly(filtroPagamento.Ano, filtroPagamento.Mes, 1)
-                : new DateOnly(filtroPagamento.Ano, filtroPagamento.Mes, 16);
-
-            // Verificar e garantir que o registro de pagamento existe
-            int pagamentoId = await EnsurePagamentoExists(entregador.Id, data);
-            if (pagamentoId == 0)
-            {
-                ShowAlert("Erro ao verificar/criar pagamentos", Color.Danger);
-                return;
-            }
-
-            var requestPagEnt = new HttpRequestMessage(HttpMethod.Get, $"https://localhost:7083/api/PagEnt/pagamentoentrega/{data.ToString("yyyy-MM-dd")}");
-            requestPagEnt.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-            var pagamentoEntregas = await Http.SendAsync(requestPagEnt).Result.Content.ReadFromJsonAsync<List<PagamentoEntrega>>() ?? new List<PagamentoEntrega>();
-
-            // Verificar se a quantidade já existe
-            var existingPagamentoEntrega = pagamentoEntregas.FirstOrDefault(pe =>
-                pe.FkPagamento == pagamentoId && pe.FkEntrega == entrega.Id && pe.Periodo == data);
-
-            if (existingPagamentoEntrega != null)
-            {
-                // Atualizar a quantidade existente
-                existingPagamentoEntrega.Quantidade = valor;
-                var requestUpdate = new HttpRequestMessage(HttpMethod.Put, $"https://localhost:7083/api/PagEnt/pagamentoentrega/{existingPagamentoEntrega.Id}");
-                requestUpdate.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-                requestUpdate.Content = JsonContent.Create(existingPagamentoEntrega);
-                var response = await Http.SendAsync(requestUpdate);
-                response.EnsureSuccessStatusCode();
-                Console.WriteLine($"Quantidade atualizada: Pagamento: {existingPagamentoEntrega.FkPagamento}, Entrega: {existingPagamentoEntrega.FkEntrega}, Quantidade: {existingPagamentoEntrega.Quantidade}, Período: {existingPagamentoEntrega.Periodo}");
-            }
-            else
-            {
-                // Criar uma nova quantidade
-                var newPagamentoEntrega = new PagamentoEntrega
-                    {
-                        FkPagamento = pagamentoId,
-                        FkEntrega = entrega.Id,
-                        Quantidade = valor,
-                        Periodo = data
-                    };
-
-                var requestCreate = new HttpRequestMessage(HttpMethod.Post, "https://localhost:7083/api/PagEnt/pagamentoentrega");
-                requestCreate.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-                requestCreate.Content = JsonContent.Create(newPagamentoEntrega);
-                var response = await Http.SendAsync(requestCreate);
-                response.EnsureSuccessStatusCode();
-                Console.WriteLine($"Nova quantidade inserida: Pagamento: {newPagamentoEntrega.FkPagamento}, Entrega: {newPagamentoEntrega.FkEntrega}, Quantidade: {newPagamentoEntrega.Quantidade}, Período: {newPagamentoEntrega.Periodo}");
-            }
-
-            // Atualizar o dicionário Quantidades do entregador
-            if (entrega.Nome != null)
-            {
-                entregador.Quantidades![entrega.Nome] = valor;
-            }
+            ShowAlert("Erro ao verificar/criar pagamentos", Color.Danger);
+            return;
         }
-        catch (Exception ex)
+
+        var pagamentoEntregas = await ApiService.GetDataAsync<List<PagamentoEntrega>>($"api/PagEnt/pagamentoentrega/{data.ToString("yyyy-MM-dd")}", token) ?? new List<PagamentoEntrega>();
+
+        var existingPagamentoEntrega = pagamentoEntregas.FirstOrDefault(pe =>
+            pe.FkPagamento == pagamentoId && pe.FkEntrega == entrega.Id && pe.Periodo == data);
+
+        if (existingPagamentoEntrega != null)
         {
-            Console.WriteLine($"Erro ao salvar quantidades: {ex.Message}");
+            existingPagamentoEntrega.Quantidade = valor;
+            await ApiService.PutDataAsync<PagamentoEntrega>($"api/PagEnt/pagamentoentrega/{existingPagamentoEntrega.Id}", JsonContent.Create(existingPagamentoEntrega), token);
+        }
+        else
+        {
+            var newPagamentoEntrega = new PagamentoEntrega
+            {
+                FkPagamento = pagamentoId,
+                FkEntrega = entrega.Id,
+                Quantidade = valor,
+                Periodo = data
+            };
+
+            await ApiService.PostDataAsync<PagamentoEntrega>("api/PagEnt/pagamentoentrega", JsonContent.Create(newPagamentoEntrega), token);
+        }
+
+        if (entrega.Nome != null)
+        {
+            entregador.Quantidades![entrega.Nome] = valor;
         }
     }
-
+    catch (Exception ex)
+    {
+        ShowAlert("Erro ao salvar quantidades", Color.Danger);
+    }
+}
 
     private async Task OnQuantidadeChanged(Entregador entregador, Entrega entrega, int valor)
     {
@@ -428,8 +357,8 @@ else
 
         try
         {
-            // Aguardar 2,5 segundos antes de continuar
-            await Task.Delay(2500, debounceCts.Token);
+            // Aguardar 2 segundos antes de continuar
+            await Task.Delay(2000, debounceCts.Token);
 
             // Se o token não foi cancelado, continuar com a execução
             Console.WriteLine("Valor capturado: " + valor.ToString());
