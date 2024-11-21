@@ -96,7 +96,7 @@
                     var entregador = entregadores.FirstOrDefault(e => e.Id == pagamento.FkEntregador);
                     if (entregador == null) continue;
 
-                    decimal valorBruto = CalcularValorBruto(entregador.Id, pagamento.Periodo);
+                    decimal valorBruto = pagamento.ValorBruto;
                     decimal valorLiquido = valorBruto - pagamento.Desconto.GetValueOrDefault() - pagamento.Adiantamento.GetValueOrDefault() + pagamento.Adicional.GetValueOrDefault();
 
                     <tr class="@GetRowClass(pagamento.Pago)">
@@ -115,7 +115,7 @@
                         </td>
                         <td class="soma-coluna">@valorLiquido.ToString("C")</td>
                         <td class="id-coluna">
-                            <button class="btn btn-success btn-sm" @onclick="() => EnviarMensagemWhatsApp(entregador)">
+                            <button class="btn btn-success btn-sm" @onclick="() => EnviarMensagemWhatsApp(entregador)">@* tentar ajustar para passar por parametro os dados e não  o entregador *@
                                 <i class="bi bi-whatsapp"></i>
                             </button>
                         </td>
@@ -133,7 +133,7 @@
                 }
                 <tr>
                     <td colspan="3"><strong>Total</strong></td>
-                    <td class="soma-coluna"><strong>@pagamentos.Sum(p => CalcularValorBruto(p.FkEntregador, p.Periodo)).ToString("C")</strong></td>
+                    <td class="soma-coluna"><strong>@pagamentos.Sum(p => p.ValorBruto).ToString("C")</strong></td>
                     <td class="soma-coluna"><strong>@pagamentos.Sum(p => p.Desconto.GetValueOrDefault()).ToString("C")</strong></td>
                     <td class="soma-coluna"><strong>@pagamentos.Sum(p => p.Adiantamento.GetValueOrDefault()).ToString("C")</strong></td>
                     <td class="soma-coluna"><strong>@pagamentos.Sum(p => p.Adicional.GetValueOrDefault()).ToString("C")</strong></td>
@@ -183,7 +183,7 @@ else
     {
         try
         {
-            entregadores = await ApiService.GetDataAsync<List<Entregador>>("api/Entregador/entregadores", token);
+            entregadores = await ApiService.GetDataAsync<List<Entregador>>("api/Entregador/entregadores");
         }
         catch (Exception)
         {
@@ -205,7 +205,7 @@ else
                 data = new DateTime(filtroPagamento.Ano, filtroPagamento.Mes, 16);
             }
 
-            pagamentos = await ApiService.GetDataAsync<List<Pagamento>>($"api/Pagamento/pagamentos/{data:yyyy-MM-dd}", token);
+            pagamentos = await ApiService.GetDataAsync<List<Pagamento>>($"api/Pagamento/pagamentos/{data:yyyy-MM-dd}");
 
             foreach (var pagamento in pagamentos)
             {
@@ -224,6 +224,7 @@ else
                 var entregador = entregadores.FirstOrDefault(e => e.Id == pagamento.FkEntregador);
                 if (entregador != null)
                 {
+                    pagamento.ValorBruto = await CalcularValorBrutoAsync(entregador.Id, pagamento.Periodo);
                     UpdateValorLiquido(pagamento, entregador);
                 }
             }
@@ -233,6 +234,7 @@ else
             ShowAlert("Erro ao carregar pagamentos", Color.Danger);
         }
     }
+
 
     private async Task BuscarPagamentos()
     {
@@ -248,15 +250,16 @@ else
                 var pagamento = pagamentos.FirstOrDefault(p => p.FkEntregador == entregador.Id);
                 if (pagamento == null) return;
 
-                decimal valorBruto = CalcularValorBruto(entregador.Id, pagamento.Periodo);
+                decimal valorBruto = pagamento.ValorBruto;
                 decimal valorLiquido = valorBruto - pagamento.Desconto.GetValueOrDefault() - pagamento.Adiantamento.GetValueOrDefault() + pagamento.Adicional.GetValueOrDefault();
+                decimal valorNF = valorLiquido + pagamento.Adiantamento.GetValueOrDefault();
 
-                var pagamentoEntregas = await ApiService.GetDataAsync<List<PagamentoEntrega>>($"api/PagEnt/pagamentoentrega/pagamento/{pagamento.Id}", token);
+                var pagamentoEntregas = await ApiService.GetDataAsync<List<PagamentoEntrega>>($"api/PagEnt/pagamentoentrega/pagamento/{pagamento.Id}");
 
                 string entregasInfo = string.Empty;
                 foreach (var pagamentoEntrega in pagamentoEntregas)
                 {
-                    var entrega = await ApiService.GetDataAsync<Entrega>($"api/Entrega/entregas/id/{pagamentoEntrega.FkEntrega}", token);
+                    var entrega = await ApiService.GetDataAsync<Entrega>($"api/Entrega/entregas/id/{pagamentoEntrega.FkEntrega}");
 
                     if (entrega != null && pagamentoEntrega.Quantidade > 0)
                     {
@@ -270,7 +273,8 @@ else
                                   $"Desconto: {pagamento.Desconto.GetValueOrDefault():C}\n" +
                                   $"Adiantamento: {pagamento.Adiantamento.GetValueOrDefault():C}\n" +
                                   $"Adicional: {pagamento.Adicional.GetValueOrDefault():C}\n" +
-                                  $"Valor Líquido: *{valorLiquido:C}*";
+                                  $"Valor do pagamento: {valorLiquido:C}\n\n" + 
+                                  $"*Valor da NF: {valorNF:C}*";
 
                 await WhatsAppService.OpenWhatsAppChat(entregador.Celular, mensagem);
             }
@@ -294,14 +298,14 @@ else
     {
         pagamento.Pago = value;
         var content = JsonContent.Create(pagamento);
-        ApiService.PutDataAsync<Pagamento>($"api/Pagamento/pagamentos/{pagamento.Id}", content, token);
+        ApiService.PutDataAsync<Pagamento>($"api/Pagamento/pagamentos/{pagamento.Id}", content);
     }
 
     private void OnNotaFiscalChanged(Pagamento pagamento, bool value)
     {
         pagamento.NotaFiscal = value;
         var content = JsonContent.Create(pagamento);
-        ApiService.PutDataAsync<Pagamento>($"api/Pagamento/pagamentos/{pagamento.Id}", content, token);
+        ApiService.PutDataAsync<Pagamento>($"api/Pagamento/pagamentos/{pagamento.Id}", content);
     }
 
     private string GetRowClass(bool pago)
@@ -311,10 +315,9 @@ else
 
     private async void UpdateValorLiquido(Pagamento pagamento, Entregador entregador)
     {
-        decimal valorBruto = CalcularValorBruto(entregador.Id, pagamento.Periodo);
-        pagamento.ValorLiquido = valorBruto - pagamento.Desconto.GetValueOrDefault() - pagamento.Adiantamento.GetValueOrDefault() + pagamento.Adicional.GetValueOrDefault();
+        pagamento.ValorLiquido = pagamento.ValorBruto - pagamento.Desconto.GetValueOrDefault() - pagamento.Adiantamento.GetValueOrDefault() + pagamento.Adicional.GetValueOrDefault();
         var content = JsonContent.Create(pagamento);
-        await ApiService.PutDataAsync<Pagamento>($"api/Pagamento/pagamentos/{pagamento.Id}", content, token);
+        await ApiService.PutDataAsync<Pagamento>($"api/Pagamento/pagamentos/{pagamento.Id}", content);
     }
 
     private string GetNomeEntrega(int fkEntrega)
@@ -330,45 +333,41 @@ else
         }
     }
 
-    private decimal CalcularValorBruto(int entregadorId, DateOnly periodo)
+    private async Task<decimal> CalcularValorBrutoAsync(int entregadorId, DateOnly periodo)
     {
         decimal valorBruto = 0;
 
         try
         {
-            var pagamentos = ApiService.GetData<List<Pagamento>>($"api/Pagamento/pagamentos/{periodo:yyyy-MM-dd}/{entregadorId}", token);
+            var pagamentos = await ApiService.GetDataAsync<List<Pagamento>>($"api/Pagamento/pagamentos/{periodo:yyyy-MM-dd}/{entregadorId}");
 
             if (pagamentos != null)
             {
+                var entregadorEntregas = await ApiService.GetDataAsync<List<EntregadorEntrega>>($"api/EntrEnt/entregador_entrega/{entregadorId}");
+
                 foreach (var pagamento in pagamentos)
                 {
-                    var pagamentoEntregas = ApiService.GetData<List<PagamentoEntrega>>($"api/PagEnt/pagamentoentrega/pagamento/{pagamento.Id}", token);
+                    var pagamentoEntregas = await ApiService.GetDataAsync<List<PagamentoEntrega>>($"api/PagEnt/pagamentoentrega/pagamento/{pagamento.Id}");
 
                     foreach (var pagamentoEntrega in pagamentoEntregas)
                     {
-                        string nomeEntrega = GetNomeEntrega(pagamentoEntrega.FkEntrega);
-                        if (string.IsNullOrEmpty(nomeEntrega)) continue;
-
-                        var entregadorEntrega = ApiService.GetData<List<EntregadorEntrega>>($"api/EntrEnt/entregador_entrega/{entregadorId}/nome/{nomeEntrega}", token);
-
-                        if (entregadorEntrega != null)
+                        var entrega = entregadorEntregas.FirstOrDefault(e =>
+                        e.FkEntregaNavigation?.Nome == pagamentoEntrega.NomeEntrega);
+                        if (entrega != null)
                         {
-                            foreach (var item in entregadorEntrega)
+                            decimal valorEntrega = entrega.FkEntregaNavigation?.Valor ?? 0;
+
+                            if (valorEntrega > 0 && pagamentoEntrega.Quantidade > 0)
                             {
-                                decimal valorEntrega = item.FkEntregaNavigation?.Valor ?? 0;
-                                if (valorEntrega > 0)
-                                {
-                                    valorBruto += pagamentoEntrega.Quantidade * valorEntrega;
-                                }
+                                valorBruto += pagamentoEntrega.Quantidade * valorEntrega; 
                             }
                         }
                     }
                 }
             }
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // Trate a exceção conforme necessário
         }
 
         return valorBruto;
@@ -408,11 +407,13 @@ else
         public int FkEntregador { get; set; }
         public DateOnly Periodo { get; set; }
         public decimal ValorLiquido { get; set; }
+        public decimal ValorBruto { get; set; }
     }
 
     public class PagamentoEntrega
     {
         public int Id { get; set; }
+        public string? NomeEntrega { get; set; }
         public int FkEntrega { get; set; }
         public int FkPagamento { get; set; }
         public int Quantidade { get; set; }

@@ -136,7 +136,7 @@ else
     {
         try
         {
-            entregadores = await ApiService.GetDataAsync<List<Entregador>>("api/Entregador/entregadores", token) ?? new List<Entregador>();
+            entregadores = await ApiService.GetDataAsync<List<Entregador>>("api/Entregador/entregadores") ?? new List<Entregador>();
             entregadores = entregadores.OrderBy(e => e.Nome).ToList();
         }
         catch (Exception)
@@ -184,12 +184,12 @@ else
 
             if (isEditMode)
             {
-                await ApiService.PutDataAsync<Entregador>($"api/Entregador/entregadores/{newEntregador.Id}", JsonContent.Create(newEntregador), token);
+                await ApiService.PutDataAsync<Entregador>($"api/Entregador/entregadores/{newEntregador.Id}", JsonContent.Create(newEntregador));
                 ShowAlert("Entregador alterado com sucesso!", Color.Success);
             }
             else
             {
-                await ApiService.PostDataAsync<Entregador>("api/Entregador/entregadores", JsonContent.Create(newEntregador), token);
+                await ApiService.PostDataAsync<Entregador>("api/Entregador/entregadores", JsonContent.Create(newEntregador));
                 ShowAlert("Entregador cadastrado com sucesso!", Color.Success);
             }
 
@@ -210,7 +210,7 @@ else
             if (entregador != null)
             {
                 entregador.Situacao = false;
-                await ApiService.PutDataAsync<Entregador>($"api/Entregador/entregadores/{entregador.Id}", JsonContent.Create(entregador), token);
+                await ApiService.PutDataAsync<Entregador>($"api/Entregador/entregadores/{entregador.Id}", JsonContent.Create(entregador));
 
                 await LoadEntregadores();
                 ShowAlert("Entregador inativado com sucesso!", Color.Success);

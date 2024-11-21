@@ -21,7 +21,7 @@
 
 @if (permissao == "1" || permissao == "2")
 {
-    <EditForm Model="filtroPagamento" OnValidSubmit="LoadQuantidades">
+    <EditForm Model="filtroPagamento" OnValidSubmit="BuscarQuantidades">
         <div class="form-row d-flex justify-content-between">
             <div class="form-group col-md-3 d-flex align-items-center">
                 <label class="mr-2"><strong>Mês:</strong></label>
@@ -78,7 +78,7 @@
                         <td><strong>@rowIndex</strong></td>
                         <td>@entregador.Nome @entregador.Sobrenome</td>
                         <td>
-                            <Select TValue="int" SelectedValue="@GetCidade(entregador.Id)" SelectedValueChanged="@(async (cidadeId) => await CriarPagamento(entregador.Id, cidadeId))">
+                            <Select TValue="int" SelectedValue="@entregador.CidadeId" SelectedValueChanged="@(async (cidadeId) => await ChangePagamento(entregador.Id, cidadeId))">
                                 <option value="0">Selecione uma cidade</option>
                                 @foreach (var cidade in cidades)
                                 {
@@ -89,7 +89,7 @@
                         @foreach (var entrega in entregas)
                         {
                             <td @key="entrega.Id">
-                                <NumericEdit Plaintext TValue="int" Value="@GetQuantidade(entregador, entrega)" ValueChanged="@(async (valor) => await OnQuantidadeChanged(entregador, entrega, valor))" />
+                                <NumericEdit Plaintext TValue="int" Min=0 Value="@GetQuantidade(entregador, entrega)" ValueChanged="@(async (valor) => await OnQuantidadeChanged(entregador, entrega, valor))" />
                             </td>
                         }
                         <td><strong>@GetTotalQuantidadeEntregador(entregador)</strong></td> 
@@ -119,6 +119,9 @@ else
     private List<Pagamento> pagamentos = new List<Pagamento>();
     private List<Cidade> cidades = new List<Cidade>();
 
+    private Dictionary<int, Task<int>> cidadeTasks = new Dictionary<int, Task<int>>();
+
+
     private string token = string.Empty;
     private string permissao = string.Empty;
 
@@ -142,6 +145,7 @@ else
                 await LoadEntregadores();
                 await LoadEntregas();
                 await LoadQuantidades();
+                await LoadAssociationsCities();
             }
 
             StateHasChanged(); // Força a atualização do componente após a inicialização
@@ -152,13 +156,13 @@ else
     {
         try
         {
-            var todosEntregadores = await ApiService.GetDataAsync<List<Entregador>>("api/Entregador/entregadores", token);
+            var todosEntregadores = await ApiService.GetDataAsync<List<Entregador>>("api/Entregador/entregadores");
 
             // Calcular a data correta com base no mês e ano selecionados, sempre dia 01
             DateOnly data = new DateOnly(filtroPagamento.Ano, filtroPagamento.Mes, 01);
 
             // Obter pagamentos para o mês e ano selecionados
-            var pagamentos = await ApiService.GetDataAsync<List<Pagamento>>($"api/Pagamento/pagamentos/{data.ToString("yyyy-MM-dd")}", token);
+            var pagamentos = await ApiService.GetDataAsync<List<Pagamento>>($"api/Pagamento/pagamentos/{data.ToString("yyyy-MM-dd")}");
 
             // Verificar se a data do filtro é anterior a dois meses
             DateTime dataFiltro = new DateTime(filtroPagamento.Ano, filtroPagamento.Mes, 1);
@@ -166,15 +170,33 @@ else
 
             if (dataFiltro < doisMesesAtras)
             {
-                // Incluir entregadores inativos
-                entregadores = todosEntregadores.Where(e => !pagamentos.Any(p => p.FkEntregador == e.Id && p.FkCidade == 1)).ToList();
+                // Inclui entregadores inativos
+                entregadores = todosEntregadores.Where(e => e.Situacao == false).ToList();
             }
             else
             {
-                // Filtrar apenas entregadores ativos
+                // Filtra apenas entregadores ativos
                 todosEntregadores = todosEntregadores.Where(e => e.Situacao).ToList();
-                entregadores = todosEntregadores.Where(e => !pagamentos.Any(p => p.FkEntregador == e.Id && p.FkCidade == 1)).ToList();
             }
+
+            // Exclui entregadores que possuem pagamento no dia 1 do mês selecionado
+            entregadores = todosEntregadores.Where(e => !pagamentos.Any(p => p.FkEntregador == e.Id)).ToList();
+
+            foreach (var entregador in entregadores)
+            {
+                var pagamento = pagamentos.FirstOrDefault(p => p.FkEntregador == entregador.Id);
+                if (pagamento != null)
+                {
+                    var cidade = cidades.FirstOrDefault(c => c.Id == pagamento.FkCidade);
+                    if (cidade != null)
+                    {
+                        entregador.CidadeId = cidade.Id;
+                        entregador.CidadeNome = cidade.Nome;
+                    }
+                }
+            }
+
+            entregadores = entregadores.OrderBy(e => e.Nome).ThenBy(e => e.Sobrenome).ToList();
         }
         catch (Exception)
         {
@@ -186,7 +208,7 @@ else
     {
         try
         {
-            entregas = await ApiService.GetDataAsync<List<Entrega>>("api/Entrega/entregas", token);
+            entregas = await ApiService.GetDataAsync<List<Entrega>>("api/Entrega/entregas");
             entregas = entregas.Where(e => e.Situacao).ToList(); // Filtrar apenas entregas ativas
             entregas = entregas
                 .GroupBy(e => e.Nome) // Agrupa por nome
@@ -205,8 +227,9 @@ else
     {
         try
         {
-            cidades = await ApiService.GetDataAsync<List<Cidade>>("api/Cidade/cidades", token);
+            cidades = await ApiService.GetDataAsync<List<Cidade>>("api/Cidade/cidades");
             cidades = cidades.Where(c => c.Id != 1).ToList(); // Excluir cidade com id 1
+            cidades = cidades.OrderBy(c => c.Nome).ToList();
         }
         catch (Exception)
         {
@@ -218,15 +241,11 @@ else
     {
         try
         {
-            entregadores.Clear();
-            await LoadEntregadores();
-            Console.WriteLine("Filtro mês: " + filtroPagamento.Mes);
-            Console.WriteLine("Filtro ano: " + filtroPagamento.Ano);
             // Calcular a data correta com base no mês e ano selecionados, sempre dia 10
             DateOnly data = new DateOnly(filtroPagamento.Ano, filtroPagamento.Mes, 10);
 
-            // Fazer a requisição para a API com o parâmetro de data
-            pagamentos = await ApiService.GetDataAsync<List<Pagamento>>($"api/Pagamento/pagamentos/{data.ToString("yyyy-MM-dd")}", token);
+            // Fazer a requisição para a API com o parâmetro de data e obter pagamentos
+            pagamentos = await ApiService.GetDataAsync<List<Pagamento>>($"api/Pagamento/pagamentos/{data.ToString("yyyy-MM-dd")}") ?? new List<Pagamento>();
 
             // Limpar as quantidades antigas
             foreach (var entregador in entregadores)
@@ -234,13 +253,23 @@ else
                 entregador.Quantidades?.Clear();
             }
 
-            // Atualizar as quantidades com os novos dados
+            // Atualizar as quantidades com os novos dados de pagamentos
             foreach (var pagamento in pagamentos)
             {
                 var entregador = entregadores.FirstOrDefault(e => e.Id == pagamento.FkEntregador);
                 if (entregador != null)
                 {
-                    var pagamentoEntregas = await ApiService.GetDataAsync<List<PagamentoEntrega>>($"api/PagEnt/pagamentoentrega/pagamento/{pagamento.Id}", token);
+                    List<PagamentoEntrega> pagamentoEntregas;
+                    try
+                    {
+                        pagamentoEntregas = await ApiService.GetDataAsync<List<PagamentoEntrega>>($"api/PagEnt/pagamentoentrega/pagamento/{pagamento.Id}") ?? new List<PagamentoEntrega>();
+                    }
+                    catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+                    {
+                        // Se o erro for 404, inicialize pagamentoEntregas como uma lista vazia para evitar interrupção
+                        pagamentoEntregas = new List<PagamentoEntrega>();
+                    }
+
                     foreach (var pagamentoEntrega in pagamentoEntregas)
                     {
                         var entrega = entregas.FirstOrDefault(e => e.Id == pagamentoEntrega.FkEntrega);
@@ -252,9 +281,38 @@ else
                 }
             }
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            ShowAlert("Erro ao carregar quantidades", Color.Danger);
+            ShowAlert("Erro ao carregar quantidades: " + ex, Color.Danger);
+        }
+    }
+
+    private async Task LoadAssociationsCities()
+    {
+        try
+        {
+            DateOnly data = new DateOnly(filtroPagamento.Ano, filtroPagamento.Mes, 10);
+
+            // Fazer a requisição para a API com o parâmetro de data e obter pagamentos
+            var pagamentos = await ApiService.GetDataAsync<List<Pagamento>>($"api/Pagamento/pagamentos/{data.ToString("yyyy-MM-dd")}") ?? new List<Pagamento>();
+
+            foreach (var pagamento in pagamentos)
+            {
+                var entregador = entregadores.FirstOrDefault(e => e.Id == pagamento.FkEntregador);
+                if (entregador != null)
+                {
+                    var cidade = cidades.FirstOrDefault(c => c.Id == pagamento.FkCidade);
+                    if (cidade != null)
+                    {
+                        entregador.CidadeId = cidade.Id;
+                        entregador.CidadeNome = cidade.Nome;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowAlert("Erro ao carregar associações entre entregador e cidade: " + ex.Message, Color.Danger);
         }
     }
 
@@ -273,18 +331,32 @@ else
         return entregadores.Sum(entregador => GetTotalQuantidadeEntregador(entregador));
     }
 
-    private async Task CriarPagamento(int entregadorId, int cidadeId)
+    private async Task ChangePagamento(int entregadorId, int cidadeId)
     {
         try
         {
             DateOnly data = new DateOnly(filtroPagamento.Ano, filtroPagamento.Mes, 10);
-
-            // Verificar se o registro de pagamento já existe
-            var response = await ApiService.GetDataAsync<Pagamento>($"api/Pagamento/pagamentos/{data.ToString("yyyy-MM-dd")}/{entregadorId}", token);
-
-            if (response == null)
+            List<Pagamento> response = null;
+            try
             {
-                // Se o pagamento não for encontrado, cria um novo pagamento
+                // Fazer a chamada para obter os pagamentos
+                response = await ApiService.GetDataAsync<List<Pagamento>>($"api/Pagamento/pagamentos/{data.ToString("yyyy-MM-dd")}/{entregadorId}");
+            }
+            catch (HttpRequestException ex)
+            {
+                // Verifica se a exceção foi causada por um 404 Not Found
+                if (ex.Message.Contains("404"))
+                {
+                }
+                else
+                {
+                    throw;
+                }
+            }
+
+            if (response == null || response.Count == 0)
+            {
+                // Se não houver pagamento, cria um novo pagamento
                 var novoPagamento = new Pagamento
                     {
                         FkEntregador = entregadorId,
@@ -297,20 +369,40 @@ else
                         NotaFiscal = false
                     };
 
-                var createdPagamento = await ApiService.PostDataAsync<Pagamento>("api/Pagamento/pagamentos", JsonContent.Create(novoPagamento), token);
-                pagamentos = await ApiService.GetDataAsync<List<Pagamento>>($"api/Pagamento/pagamentos/{data.ToString("yyyy-MM-dd")}", token);
+                // Criação do novo pagamento
+                var createdPagamento = await ApiService.PostDataAsync<Pagamento>("api/Pagamento/pagamentos", JsonContent.Create(novoPagamento));
+                pagamentos.Add(createdPagamento);
+                ShowAlert("Cidade vinculada com sucesso.", Color.Success);
             }
             else
             {
-                Console.WriteLine("Pagamento já existe para o entregador e data especificados.");
+                // Se o pagamento já existir, atualiza a cidade
+                var pagamentoExistente = response.First();
+                pagamentoExistente.FkCidade = cidadeId;
+
+                // Atualização do pagamento existente
+                await ApiService.PutDataAsync<Pagamento>($"api/Pagamento/pagamentos/{pagamentoExistente.Id}", JsonContent.Create(pagamentoExistente));
+                ShowAlert("Cidade atualizada com sucesso.", Color.Success);
             }
-            StateHasChanged();
+
+            // Atualizar a cidade do entregador na lista local
+            var entregador = entregadores.FirstOrDefault(e => e.Id == entregadorId);
+            if (entregador != null)
+            {
+                var cidade = cidades.FirstOrDefault(c => c.Id == cidadeId);
+                if (cidade != null)
+                {
+                    entregador.CidadeId = cidade.Id;
+                    entregador.CidadeNome = cidade.Nome;
+                }
+            }
         }
         catch (Exception ex)
         {
-            ShowAlert("Erro ao criar pagamento", Color.Danger);
+            ShowAlert("Erro ao criar ou atualizar pagamento: " + ex.Message, Color.Danger);
         }
     }
+
 
     private async Task SaveQuantidades(Entregador entregador, Entrega entrega, int valor)
     {
@@ -322,46 +414,82 @@ else
             var pagamento = pagamentos.FirstOrDefault(p => p.FkEntregador == entregador.Id && p.Periodo == data);
             if (pagamento == null)
             {
-                ShowAlert("Erro ao verificar/criar pagamentos", Color.Danger);
-                return;
+                throw new Exception("Erro ao verificar/criar pagamentos");
             }
 
-            var pagamentoEntregas = await ApiService.GetDataAsync<List<PagamentoEntrega>>($"api/PagEnt/pagamentoentrega/{data.ToString("yyyy-MM-dd")}", token);
+            // Tentar obter o pagamentoEntrega existentevar pagamentoEntregas = await ApiService.GetDataAsync<List<PagamentoEntrega>>($"api/PagEnt/pagamentoentrega/{data.ToString("yyyy-MM-dd")}") ?? new List<PagamentoEntrega>();
+            var pagamentoEntregas = await ApiService.GetDataAsync<List<PagamentoEntrega>>($"api/PagEnt/pagamentoentrega/{data.ToString("yyyy-MM-dd")}") ?? new List<PagamentoEntrega>();
 
-            // Verificar se a quantidade já existe
             var existingPagamentoEntrega = pagamentoEntregas.FirstOrDefault(pe =>
                 pe.FkPagamento == pagamento.Id && pe.FkEntrega == entrega.Id && pe.Periodo == data);
 
             if (existingPagamentoEntrega != null)
             {
-                // Atualizar a quantidade existente
+                // Se existir, atualizar a quantidade
                 existingPagamentoEntrega.Quantidade = valor;
-                await ApiService.PutDataAsync<PagamentoEntrega>($"api/PagEnt/pagamentoentrega/{existingPagamentoEntrega.Id}", JsonContent.Create(existingPagamentoEntrega), token);
+
+                // Atualização do pagamentoEntrega existente
+                await ApiService.PutDataAsync<PagamentoEntrega>($"api/PagEnt/pagamentoentrega/{existingPagamentoEntrega.Id}", JsonContent.Create(existingPagamentoEntrega));
+
             }
             else
             {
-                // Criar uma nova quantidade
-                var novoPagamentoEntrega = new PagamentoEntrega
+                // Se não existir, criar um novo
+                var newPagamentoEntrega = new PagamentoEntrega
                     {
                         FkPagamento = pagamento.Id,
                         FkEntrega = entrega.Id,
                         Quantidade = valor,
                         Periodo = data
                     };
-                await ApiService.PostDataAsync<PagamentoEntrega>("api/PagEnt/pagamentoentrega", JsonContent.Create(novoPagamentoEntrega), token);
+
+                // Criação do novo pagamentoEntrega
+                await ApiService.PostDataAsync<PagamentoEntrega>("api/PagEnt/pagamentoentrega", JsonContent.Create(newPagamentoEntrega));
             }
+
+            if (entrega.Nome != null)
+            {
+                entregador.Quantidades![entrega.Nome] = valor;
+            }
+            // var pagamentoEntrega = new PagamentoEntrega
+            //     {
+            //         FkPagamento = pagamento.Id,
+            //         FkEntrega = entrega.Id,
+            //         Quantidade = valor,
+            //         Periodo = data
+            //     };
+
+            // Tentativa de atualização
+            // try
+            // {
+            //     var updateResponse = await ApiService.PutDataAsync<PagamentoEntrega>($"api/PagEnt/pagamentoentrega/{pagamentoEntrega.Id}", JsonContent.Create(pagamentoEntrega));
+
+            // }
+            // catch (HttpRequestException ex)
+            // {
+            //     // Verifica se a exceção o put deu certo, se não usa post
+            //     if (ex.Message.Contains("404"))
+            //     {
+            //         await ApiService.PostDataAsync<PagamentoEntrega>("api/PagEnt/pagamentoentrega", JsonContent.Create(pagamentoEntrega));
+            //     }
+            //     else
+            //     {
+            //         // Se for outra exceção, deve ser tratada fora
+            //         throw;
+            //     }
+            // }
+            ShowAlert("Quantidade salva", Color.Success);
         }
         catch (Exception ex)
         {
-            ShowAlert("Erro ao salvar quantidades", Color.Danger);
+            ShowAlert("Erro ao salvar quantidades: " + ex.Message, Color.Danger);
         }
     }
 
 
     private async Task OnQuantidadeChanged(Entregador entregador, Entrega entrega, int valor)
     {
-        int cidadeId = GetCidade(entregador.Id);
-        if (cidadeId == 0)
+        if (entregador.CidadeId == 0)
         {
             ShowAlert("ERRO! Selecione uma cidade antes de inserir uma quantidade", Color.Danger);
             return;
@@ -383,15 +511,10 @@ else
             await Task.Delay(2000, debounceCts.Token);
 
             // Se o token não foi cancelado, continuar com a execução
-            Console.WriteLine("Valor capturado: " + valor.ToString());
 
             if (int.TryParse(valor.ToString(), out int quantidade))
             {
                 await SaveQuantidades(entregador, entrega, quantidade);
-            }
-            else
-            {
-                Console.WriteLine("Valor inválido para quantidade.");
             }
         }
         catch (TaskCanceledException)
@@ -409,29 +532,20 @@ else
         return 0;
     }
 
-    private int GetCidade(int entregadorId)
+    private async Task BuscarQuantidades()
     {
-        try
+        foreach (var entregador in entregadores)
         {
-            DateOnly data = new DateOnly(filtroPagamento.Ano, filtroPagamento.Mes, 10);
-            int cidade = 0;
-
-            // Fazer a requisição para a API com o parâmetro de data e entregador
-            var pagamentos = ApiService.GetData<List<Pagamento>>($"api/Pagamento/pagamentos/{data.ToString("yyyy-MM-dd")}/{entregadorId}", token);
-
-            if (pagamentos != null)
-            {
-                cidade = pagamentos.FirstOrDefault()?.FkCidade ?? 0;
-                return cidade;
-            }
+            entregador.Quantidades?.Clear();
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Erro ao obter cidade: {ex.Message}");
-        }
-        return 0;
+
+        await LoadCidades();
+        await LoadEntregadores();
+        await LoadEntregas();
+        await LoadQuantidades();
+        await LoadAssociationsCities();
+        StateHasChanged();
     }
-
 
     private bool showAlert = false;
     private string alertMessage = string.Empty;
@@ -452,6 +566,8 @@ else
         public string? Pix { get; set; }
         public bool Situacao { get; set; }
         public Dictionary<string, int>? Quantidades { get; set; } = new Dictionary<string, int>();
+        public int CidadeId { get; set; } = 0;
+        public string? CidadeNome { get; set; }
     }
 
     public class Entrega
@@ -464,7 +580,7 @@ else
 
     public class FiltroPagamento
     {
-        public int Mes { get; set; } = DateTime.Now.Month;
+        public int Mes { get; set; } = DateTime.Now.Month - 1;
         public int Ano { get; set; } = DateTime.Now.Year;
     }
 

@@ -64,6 +64,7 @@ namespace API_TCC.Controllers
 
         [HttpGet]
         [Route("usuarios")]
+        [Authorize]
         public async Task<IActionResult> getAllAsync(//consulta geral
            [FromServices] Contexto contexto)
         {

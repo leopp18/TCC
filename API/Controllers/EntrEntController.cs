@@ -46,22 +46,20 @@ namespace API_TCC.Controllers
         }
 
         [HttpGet]
-        [Route("entregador_entrega/{fkEntregador}/nome/{nomeEntrega}")]
-        public async Task<IActionResult> getByFkEntregadorAndEntregaNameAsync(
+        [Route("entregador_entrega/{fkEntregador}")]
+        public async Task<IActionResult> getByFkEntregadorAsync(
         [FromServices] Contexto contexto,
-        [FromRoute] int fkEntregador,
-        [FromRoute] string nomeEntrega)
+        [FromRoute] int fkEntregador)
         {
             var entregadorEntregas = await contexto
                 .EntregadorEntregas
                 .AsNoTracking()
                 .Include(e => e.FkEntregaNavigation) // Inclui a navegação para a tabela Entrega
-                .Where(e => e.FkEntregador == fkEntregador && e.FkEntregaNavigation != null && e.FkEntregaNavigation.Nome == nomeEntrega)
+                .Where(e => e.FkEntregador == fkEntregador)
                 .ToListAsync();
 
             return entregadorEntregas == null || !entregadorEntregas.Any() ? NotFound() : Ok(entregadorEntregas);
         }
-
 
         [HttpPost]
         [Route("entregador_entrega")]

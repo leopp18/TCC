@@ -112,7 +112,7 @@ else
     {
         try
         {
-            estados = await ApiService.GetDataAsync<List<Estado>>("api/Estado/estados", token) ?? new List<Estado>();
+            estados = await ApiService.GetDataAsync<List<Estado>>("api/Estado/estados") ?? new List<Estado>();
         }
         catch (Exception)
         {
@@ -150,12 +150,12 @@ else
         {
             if (isEditMode)
             {
-                await ApiService.PutDataAsync<Estado>($"api/Estado/estados/{newState.Id}", JsonContent.Create(newState), token);
+                await ApiService.PutDataAsync<Estado>($"api/Estado/estados/{newState.Id}", JsonContent.Create(newState));
                 ShowAlert("Estado alterado com sucesso!", Color.Success);
             }
             else
             {
-                await ApiService.PostDataAsync<Estado>("api/Estado/estados", JsonContent.Create(newState), token);
+                await ApiService.PostDataAsync<Estado>("api/Estado/estados", JsonContent.Create(newState));
                 ShowAlert("Estado cadastrado com sucesso!", Color.Success);
             }
 

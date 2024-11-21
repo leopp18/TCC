@@ -55,7 +55,17 @@ namespace API_TCC.Controllers
             var pagamentoEntregas = await contexto
                 .PagamentoEntregas
                 .AsNoTracking()
+                .Include(e => e.FkEntregaNavigation)
                 .Where(e => e.FkPagamento == fkPagamento)
+                .Select(e => new
+                {
+                    e.Id,
+                    e.Quantidade,
+                    e.FkEntrega,
+                    e.FkPagamento,
+                    e.Periodo,
+                    NomeEntrega = e.FkEntregaNavigation.Nome // Seleciona o nome da entrega
+                })
                 .ToListAsync();
 
             return pagamentoEntregas == null || !pagamentoEntregas.Any() ? NotFound() : Ok(pagamentoEntregas);

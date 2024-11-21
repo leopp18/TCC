@@ -20,7 +20,7 @@
 
 @if (permissao == "1" || permissao == "2")
 {
-    <EditForm Model="filtroPagamento" OnValidSubmit="LoadQuantidades">
+    <EditForm Model="filtroPagamento" OnValidSubmit="BuscarQuantidades">
         <div class="form-row d-flex justify-content-between">
             <div class="form-group col-md-3 d-flex align-items-center">
                 <label class="mr-2"><strong>Quinzena:</strong></label>
@@ -87,10 +87,10 @@
                         @foreach (var entrega in entregas)
                         {
                             <td @key="entrega.Id">
-                                <NumericEdit Plaintext TValue="int" Value="@GetQuantidade(entregador, entrega)" ValueChanged="@(async (valor) => await OnQuantidadeChanged(entregador, entrega, valor))" />
+                                <NumericEdit Plaintext TValue="int" Min=0 Value="@GetQuantidade(entregador, entrega)" ValueChanged="@(async (valor) => await OnQuantidadeChanged(entregador, entrega, valor))" />
                             </td>
                         }
-                        <td><strong>@GetTotalQuantidadeEntregador(entregador)</strong></td> <!-- Nova célula para o total de cada entregador -->
+                        <td><strong>@GetTotalQuantidadeEntregador(entregador)</strong></td> 
                     </tr>
                     rowIndex++;
                 }
@@ -100,7 +100,7 @@
                     {
                         <td><strong>@GetTotalQuantidade(entrega)</strong></td>
                     }
-                    <td><strong>@GetTotalGeral()</strong></td> <!-- Nova célula para o total geral -->
+                    <td><strong>@GetTotalGeral()</strong></td> 
                 </tr>
             }
         </TableBody>
@@ -149,10 +149,10 @@ else
 {
     try
     {
-        var todosEntregadores = await ApiService.GetDataAsync<List<Entregador>>("api/Entregador/entregadores", token) ?? new List<Entregador>();
+        var todosEntregadores = await ApiService.GetDataAsync<List<Entregador>>("api/Entregador/entregadores") ?? new List<Entregador>();
 
         DateOnly dataMesAnterior = new DateOnly(filtroPagamento.Ano, filtroPagamento.Mes - 1, 10);
-        var pagamentosMesAnterior = await ApiService.GetDataAsync<List<Pagamento>>($"api/Pagamento/pagamentos/{dataMesAnterior.ToString("yyyy-MM-dd")}", token) ?? new List<Pagamento>();
+        var pagamentosMesAnterior = await ApiService.GetDataAsync<List<Pagamento>>($"api/Pagamento/pagamentos/{dataMesAnterior.ToString("yyyy-MM-dd")}") ?? new List<Pagamento>();
 
         DateTime dataFiltro = new DateTime(filtroPagamento.Ano, filtroPagamento.Mes, 1);
         DateTime doisMesesAtras = DateTime.Now.AddMonths(-2);
@@ -166,6 +166,7 @@ else
             todosEntregadores = todosEntregadores.Where(e => e.Situacao).ToList();
             entregadores = todosEntregadores.Where(e => !pagamentosMesAnterior.Any(p => p.FkEntregador == e.Id)).ToList();
         }
+        entregadores = entregadores.OrderBy(e => e.Nome).ThenBy(e => e.Sobrenome).ToList();
     }
     catch (Exception ex)
     {
@@ -178,7 +179,7 @@ else
     {
         try
         {
-            entregas = await ApiService.GetDataAsync<List<Entrega>>("api/Entrega/entregas", token) ?? new List<Entrega>();
+            entregas = await ApiService.GetDataAsync<List<Entrega>>("api/Entrega/entregas") ?? new List<Entrega>();
             entregas = entregas.Where(e => e.Situacao && e.Nome != "Kms").ToList();
             entregas = entregas
                 .GroupBy(e => e.Nome)
@@ -200,7 +201,7 @@ else
                 ? new DateOnly(filtroPagamento.Ano, filtroPagamento.Mes, 1)
                 : new DateOnly(filtroPagamento.Ano, filtroPagamento.Mes, 16);
 
-            pagamentos = await ApiService.GetDataAsync<List<Pagamento>>($"api/Pagamento/pagamentos/{data.ToString("yyyy-MM-dd")}", token) ?? new List<Pagamento>();
+            pagamentos = await ApiService.GetDataAsync<List<Pagamento>>($"api/Pagamento/pagamentos/{data.ToString("yyyy-MM-dd")}") ?? new List<Pagamento>();
 
             foreach (var entregador in entregadores)
             {
@@ -212,7 +213,7 @@ else
                 var entregador = entregadores.FirstOrDefault(e => e.Id == pagamento.FkEntregador);
                 if (entregador != null)
                 {
-                    var pagamentoEntregas = await ApiService.GetDataAsync<List<PagamentoEntrega>>($"api/PagEnt/pagamentoentrega/pagamento/{pagamento.Id}", token) ?? new List<PagamentoEntrega>();
+                    var pagamentoEntregas = await ApiService.GetDataAsync<List<PagamentoEntrega>>($"api/PagEnt/pagamentoentrega/pagamento/{pagamento.Id}") ?? new List<PagamentoEntrega>();
 
                     foreach (var pagamentoEntrega in pagamentoEntregas)
                     {
@@ -248,46 +249,55 @@ else
 
     private async Task BuscarQuantidades()
     {
+        await LoadEntregadores();
+        await LoadEntregas();
         await LoadQuantidades();
+        StateHasChanged();
     }
 
     private async Task<int> EnsurePagamentoExists(int fkEntregador, DateOnly data)
     {
         try
         {
-            var pagamentoResponse = await ApiService.GetDataAsync<List<Pagamento>>($"api/Pagamento/pagamentos/{data.ToString("yyyy-MM-dd")}/{fkEntregador}", token) ?? new List<Pagamento>();
-            foreach (var pagamento in pagamentoResponse)
-            {
-                if (pagamento != null)
-                {
-                    return pagamento.Id;
-                }
-            }
-            throw new PagamentoNaoEncontradoException("Pagamento não encontrado para a data e entregador especificados.");
-        }
-        catch (PagamentoNaoEncontradoException)
-        {
-            var novoPagamento = new Pagamento
-            {
-                FkEntregador = fkEntregador,
-                Periodo = data,
-                FkCidade = 1,
-                Adicional = null,
-                Desconto = null,
-                Adiantamento = null,
-                Pago = false,
-                NotaFiscal = false
-            };
+            List<Pagamento> pagamentoResponse = null;
 
-            var createdPagamento = await ApiService.PostDataAsync<Pagamento>("api/Pagamento/pagamentos", JsonContent.Create(novoPagamento), token);
+            try
+            {
+                pagamentoResponse = await ApiService.GetDataAsync<List<Pagamento>>($"api/Pagamento/pagamentos/{data.ToString("yyyy-MM-dd")}/{fkEntregador}");
+            }
+            catch (HttpRequestException ex) when (ex.Message.Contains("404"))
+            {
+                Console.WriteLine("Pagamento não encontrado, criando novo pagamento...");
+                pagamentoResponse = new List<Pagamento>();
+            }
+
+            if (pagamentoResponse != null && pagamentoResponse.Any())
+            {
+                return pagamentoResponse.First().Id;
+            }
+
+            var novoPagamento = new Pagamento
+                {
+                    FkEntregador = fkEntregador,
+                    Periodo = data,
+                    FkCidade = 1,
+                    Adicional = null,
+                    Desconto = null,
+                    Adiantamento = null,
+                    Pago = false,
+                    NotaFiscal = false
+                };
+
+            var createdPagamento = await ApiService.PostDataAsync<Pagamento>("api/Pagamento/pagamentos", JsonContent.Create(novoPagamento));
             return createdPagamento?.Id ?? 0;
         }
         catch (Exception ex)
         {
-            ShowAlert("Erro ao verificar/criar pagamentos", Color.Danger);
+            ShowAlert("Erro ao verificar/criar pagamentos: " + ex.Message, Color.Danger);
             return 0;
         }
     }
+
 
     public class PagamentoNaoEncontradoException : Exception
     {
@@ -309,7 +319,7 @@ else
             return;
         }
 
-        var pagamentoEntregas = await ApiService.GetDataAsync<List<PagamentoEntrega>>($"api/PagEnt/pagamentoentrega/{data.ToString("yyyy-MM-dd")}", token) ?? new List<PagamentoEntrega>();
+        var pagamentoEntregas = await ApiService.GetDataAsync<List<PagamentoEntrega>>($"api/PagEnt/pagamentoentrega/{data.ToString("yyyy-MM-dd")}") ?? new List<PagamentoEntrega>();
 
         var existingPagamentoEntrega = pagamentoEntregas.FirstOrDefault(pe =>
             pe.FkPagamento == pagamentoId && pe.FkEntrega == entrega.Id && pe.Periodo == data);
@@ -317,7 +327,7 @@ else
         if (existingPagamentoEntrega != null)
         {
             existingPagamentoEntrega.Quantidade = valor;
-            await ApiService.PutDataAsync<PagamentoEntrega>($"api/PagEnt/pagamentoentrega/{existingPagamentoEntrega.Id}", JsonContent.Create(existingPagamentoEntrega), token);
+            await ApiService.PutDataAsync<PagamentoEntrega>($"api/PagEnt/pagamentoentrega/{existingPagamentoEntrega.Id}", JsonContent.Create(existingPagamentoEntrega));
         }
         else
         {
@@ -329,7 +339,7 @@ else
                 Periodo = data
             };
 
-            await ApiService.PostDataAsync<PagamentoEntrega>("api/PagEnt/pagamentoentrega", JsonContent.Create(newPagamentoEntrega), token);
+            await ApiService.PostDataAsync<PagamentoEntrega>("api/PagEnt/pagamentoentrega", JsonContent.Create(newPagamentoEntrega));
         }
 
         if (entrega.Nome != null)

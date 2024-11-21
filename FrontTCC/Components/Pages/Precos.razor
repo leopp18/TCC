@@ -107,7 +107,7 @@ else
     {
         try
         {
-            entregadores = await ApiService.GetDataAsync<List<Entregador>>("api/Entregador/entregadores", token) ?? new List<Entregador>();
+            entregadores = await ApiService.GetDataAsync<List<Entregador>>("api/Entregador/entregadores") ?? new List<Entregador>();
             entregadores = entregadores.Where(e => e.Situacao).ToList(); // Filtrar apenas entregadores ativos
             entregadores = entregadores.OrderBy(e => e.Nome).ToList();
         }
@@ -121,7 +121,7 @@ else
     {
         try
         {
-            entregas = await ApiService.GetDataAsync<List<Entrega>>("api/Entrega/entregas", token) ?? new List<Entrega>();
+            entregas = await ApiService.GetDataAsync<List<Entrega>>("api/Entrega/entregas") ?? new List<Entrega>();
             entregas = entregas.Where(e => e.Situacao).ToList(); // Filtrar apenas entregas ativas
             entregas = entregas.OrderBy(e => e.Nome).ThenBy(e => e.Valor).ToList();
         }
@@ -135,7 +135,7 @@ else
     {
         try
         {
-            entregadorEntregaAssociations = await ApiService.GetDataAsync<List<EntregadorEntrega>>("api/EntrEnt/entregador_entrega", token) ?? new List<EntregadorEntrega>();
+            entregadorEntregaAssociations = await ApiService.GetDataAsync<List<EntregadorEntrega>>("api/EntrEnt/entregador_entrega") ?? new List<EntregadorEntrega>();
         }
         catch (Exception ex)
         {
@@ -175,7 +175,7 @@ else
                             // Atualizar a associação existente
                             association.FkEntrega = entrega.Id;
                             var content = JsonContent.Create(association);
-                            await ApiService.PutDataAsync<EntregadorEntrega>($"api/EntrEnt/entregador_entrega/{association.Id}", content, token);
+                            await ApiService.PutDataAsync<EntregadorEntrega>($"api/EntrEnt/entregador_entrega/{association.Id}", content);
                         }
                         else
                         {
@@ -186,7 +186,7 @@ else
                                 // Atualizar a associação existente com o novo valor
                                 existingAssociation.FkEntrega = entrega.Id;
                                 var content = JsonContent.Create(existingAssociation);
-                                await ApiService.PutDataAsync<EntregadorEntrega>($"api/EntrEnt/entregador_entrega/{existingAssociation.Id}", content, token);
+                                await ApiService.PutDataAsync<EntregadorEntrega>($"api/EntrEnt/entregador_entrega/{existingAssociation.Id}", content);
                                 ShowAlert($"Valor alterado com sucesso!", Color.Success);
                             }
                             else
@@ -195,7 +195,7 @@ else
                                 association = new EntregadorEntrega { FkEntregador = entregadorId, FkEntrega = entrega.Id };
                                 entregadorEntregaAssociations.Add(association);
                                 var content = JsonContent.Create(association);
-                                await ApiService.PostDataAsync<EntregadorEntrega>("api/EntrEnt/entregador_entrega", content, token);
+                                await ApiService.PostDataAsync<EntregadorEntrega>("api/EntrEnt/entregador_entrega", content);
                                 ShowAlert($"Valor registrado com sucesso!", Color.Success);
                             }
                         }

@@ -133,7 +133,7 @@ else
     {
         try
         {
-            var cidadesResponse = await ApiService.GetDataAsync<List<Cidade>>("api/Cidade/cidades", token);
+            var cidadesResponse = await ApiService.GetDataAsync<List<Cidade>>("api/Cidade/cidades");
             // Associar estados às cidades
             foreach (var cidade in cidadesResponse)
             {
@@ -162,7 +162,7 @@ else
     {
         try
         {
-            estados = await ApiService.GetDataAsync<List<Estado>>("api/Estado/estados", token);
+            estados = await ApiService.GetDataAsync<List<Estado>>("api/Estado/estados");
         }
         catch (Exception)
         {
@@ -201,12 +201,12 @@ else
         {
             if (isEditMode)
             {
-                await ApiService.PutDataAsync<Cidade>($"api/Cidade/cidades/{newCity.Id}", JsonContent.Create(newCity), token);
+                await ApiService.PutDataAsync<Cidade>($"api/Cidade/cidades/{newCity.Id}", JsonContent.Create(newCity));
                 ShowAlert("Cidade alterada com sucesso!", Color.Success);
             }
             else
             {
-                await ApiService.PostDataAsync<Cidade>("api/Cidade/cidades", JsonContent.Create(newCity), token);
+                await ApiService.PostDataAsync<Cidade>("api/Cidade/cidades", JsonContent.Create(newCity));
                 ShowAlert("Cidade cadastrada com sucesso!", Color.Success);
             }
 
@@ -229,7 +229,7 @@ else
             {
                 // Atualizar o status da cidade para inativo
                 cidade.Situacao = false;
-                await ApiService.PutDataAsync<Cidade>($"api/Cidade/cidades/{cidade.Id}", JsonContent.Create(cidade), token);
+                await ApiService.PutDataAsync<Cidade>($"api/Cidade/cidades/{cidade.Id}", JsonContent.Create(cidade));
 
                 await LoadCidades();
                 ShowAlert("Cidade inativada com sucesso!", Color.Success);

@@ -108,6 +108,7 @@ namespace API_TCC.Controllers
                 e.Desconto = pagamento.Desconto;
                 e.Adiantamento = pagamento.Adiantamento;
                 e.Pago = pagamento.Pago;
+                e.FkCidade = pagamento.FkCidade;
                 e.NotaFiscal = pagamento.NotaFiscal;
                 e.Periodo = pagamento.Periodo;
 
